@@ -1,0 +1,5 @@
+{
+  "name": "Lumina Admin Portal",
+  "description": "A web portal for experts and admins to review, edit, and publish fact-checked content for the Lumina misinformation-fighting application.",
+  "requestFramePermissions": []
+}
