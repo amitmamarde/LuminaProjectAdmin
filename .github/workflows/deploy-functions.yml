@@ -20,33 +20,39 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      # Step 2: Set up Node.js environment. Version 18 is specified in functions/package.json
+      # Step 2: Set up Node.js environment with npm cache enabled
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
+          cache: 'npm'
+          cache-dependency-path: ./functions/package-lock.json
 
-      # Step 3: Clean the npm cache to prevent integrity errors
+      # Step 3: Upgrade npm to the latest version (helps avoid integrity issues)
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
+      # Step 4: Clean npm cache to prevent integrity errors from corrupted tarballs
       - name: Clean npm cache
         run: npm cache clean --force
-      
-      # Step 4: Install function dependencies using the clean lockfile
+
+      # Step 5: Install function dependencies fresh from registry
       - name: Install Function Dependencies
-        run: npm ci
+        run: npm ci --prefer-online --no-audit --no-fund
         working-directory: ./functions
 
-      # Step 5: Authenticate to Google Cloud using the service account key from GitHub Secrets
+      # Step 6: Authenticate to Google Cloud using the service account key from GitHub Secrets
       - name: Authenticate to Google Cloud
         id: auth
-        uses: 'google-github-actions/auth@v2'
+        uses: google-github-actions/auth@v2
         with:
           credentials_json: '${{ secrets.GCP_SA_KEY }}'
 
-      # Step 6: Install the Firebase CLI globally in the runner
+      # Step 7: Install the Firebase CLI globally in the runner
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
-      # Step 7: Deploy the function to Firebase, using the project ID from secrets
+      # Step 8: Deploy the function to Firebase, using the project ID from secrets
       - name: Deploy to Firebase
         run: |
           firebase deploy --only functions --project ${{ secrets.GCP_PROJECT_ID }} --non-interactive
