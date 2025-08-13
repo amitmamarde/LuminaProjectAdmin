@@ -6,7 +6,7 @@ const { defineString } = require('firebase-functions/params');
 // Initialize Firebase Admin SDK to interact with Firestore and Storage
 admin.initializeApp();
 
-// --- AI and Cloud Services Configuration ---
+// ---  AI and Cloud Services Configuration ---
 // Use Firebase's new parameter system for securely accessing the API key.
 // You will be prompted to set this value on first deploy, or you can set it with:
 // firebase functions:params:set GEMINI_API_KEY
