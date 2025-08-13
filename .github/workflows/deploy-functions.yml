@@ -1,0 +1,48 @@
+# File: .github/workflows/deploy-functions.yml
+
+name: Deploy Firebase Function
+
+# This workflow triggers on a push to the 'main' branch,
+# but ONLY if there are changes inside the 'functions' directory.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'functions/**'
+
+jobs:
+  deploy_functions:
+    name: Deploy to Firebase Functions
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Check out the repository code
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Node.js environment. Version 18 is specified in functions/package.json
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      # Step 3: Authenticate to Google Cloud using the service account key from GitHub Secrets
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: 'google-github-actions/auth@v2'
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+      # Step 4: Install the Firebase CLI
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      # Step 5: Install function dependencies
+      - name: Install Function Dependencies
+        run: npm ci
+        working-directory: ./functions
+
+      # Step 6: Deploy the function to Firebase
+      - name: Deploy to Firebase
+        run: |
+          firebase deploy --only functions --project ${{ secrets.GCP_PROJECT_ID }} --non-interactive
