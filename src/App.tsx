@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
-import * as ReactRouterDOM from 'react-router-dom';
-import * as firebaseApp from 'firebase/app';
+import { 
+  HashRouter, 
+  Routes, 
+  Route, 
+  Link, 
+  useNavigate, 
+  useParams, 
+  Navigate 
+} from 'react-router-dom';
+import { initializeApp, getApps, getApp, deleteApp } from 'firebase/app';
 import { 
   getAuth, 
   onAuthStateChanged, 
@@ -41,7 +49,7 @@ const firebaseConfig = {
 
 
 // --- Firebase Initialization ---
-const app = firebaseApp.getApps().length === 0 ? firebaseApp.initializeApp(firebaseConfig) : firebaseApp.getApp();
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
 
@@ -156,7 +164,7 @@ const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: string; chi
 
 const Header: React.FC = () => {
   const { userData } = useAuth();
-  const navigate = ReactRouterDOM.useNavigate();
+  const navigate = useNavigate();
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -166,16 +174,16 @@ const Header: React.FC = () => {
   return (
     <header className="bg-brand-surface shadow-md sticky top-0 z-40">
       <div className="container mx-auto px-6 py-4 flex justify-between items-center">
-        <ReactRouterDOM.Link to="/" className="text-2xl font-bold text-brand-primary">
+        <Link to="/" className="text-2xl font-bold text-brand-primary">
           Lumina Portal
-        </ReactRouterDOM.Link>
+        </Link>
         {userData && (
           <nav className="flex items-center space-x-4">
              {userData.role === 'Admin' && (
-              <ReactRouterDOM.Link to="/experts" className="text-brand-text-secondary hover:text-brand-primary font-medium">Manage Experts</ReactRouterDOM.Link>
+              <Link to="/experts" className="text-brand-text-secondary hover:text-brand-primary font-medium">Manage Experts</Link>
             )}
             <span className="text-brand-text-secondary">
-              Welcome, <ReactRouterDOM.Link to="/profile" className="font-semibold text-brand-primary hover:underline">{userData.displayName}</ReactRouterDOM.Link> ({userData.role})
+              Welcome, <Link to="/profile" className="font-semibold text-brand-primary hover:underline">{userData.displayName}</Link> ({userData.role})
             </span>
             <button
               onClick={handleLogout}
@@ -199,7 +207,7 @@ const LoginPage: React.FC = () => {
   const [resetEmail, setResetEmail] = useState('');
   const [resetMessage, setResetMessage] = useState('');
 
-  const navigate = ReactRouterDOM.useNavigate();
+  const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -348,7 +356,7 @@ const DashboardPage: React.FC = () => {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {articles.map(article => (
-                        <ReactRouterDOM.Link to={`/article/${article.id}`} key={article.id} className="block bg-brand-surface rounded-lg shadow hover:shadow-xl transition-shadow duration-300 p-6">
+                        <Link to={`/article/${article.id}`} key={article.id} className="block bg-brand-surface rounded-lg shadow hover:shadow-xl transition-shadow duration-300 p-6">
                             <div className="flex justify-between items-start mb-2">
                                 <h2 className="text-xl font-bold text-brand-text-primary pr-2">{article.title}</h2>
                                 <Badge status={article.status} />
@@ -360,7 +368,7 @@ const DashboardPage: React.FC = () => {
                              {article.status === ArticleStatusEnum.AwaitingExpertReview && !article.expertId && (
                                 <p className="text-sm text-yellow-600 font-semibold">Ready for expert review.</p>
                             )}
-                        </ReactRouterDOM.Link>
+                        </Link>
                     ))}
                 </div>
             )}
@@ -380,9 +388,9 @@ const DashboardPage: React.FC = () => {
 };
 
 const ArticleEditorPage: React.FC = () => {
-    const { id } = ReactRouterDOM.useParams<{ id: string }>();
+    const { id } = useParams<{ id: string }>();
     const { userData } = useAuth();
-    const navigate = ReactRouterDOM.useNavigate();
+    const navigate = useNavigate();
     const [article, setArticle] = useState<Article | null>(null);
     const [loading, setLoading] = useState(true);
     const [flashContent, setFlashContent] = useState('');
@@ -640,7 +648,7 @@ const ExpertManagementPage: React.FC = () => {
                    return;
                 }
                 // Use a temporary app instance to create the user without signing in the current admin
-                const tempApp = firebaseApp.initializeApp(firebaseConfig, 'temp-user-creation' + Date.now());
+                const tempApp = initializeApp(firebaseConfig, 'temp-user-creation' + Date.now());
                 const tempAuth = getAuth(tempApp);
                 const userCredential = await createUserWithEmailAndPassword(tempAuth, expertData.email, password);
                 const newUid = userCredential.user.uid;
@@ -656,7 +664,7 @@ const ExpertManagementPage: React.FC = () => {
 
                 await setDoc(doc(db, 'users', newUid), newUserProfile);
                 await signOut(tempAuth);
-                await firebaseApp.deleteApp(tempApp);
+                await deleteApp(tempApp);
                 alert("Expert created successfully.");
             }
             handleModalClose();
@@ -807,13 +815,13 @@ const ExpertEditModal: React.FC<{ isOpen: boolean; onClose: () => void; expert: 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user, loading } = useAuth();
     if (loading) return <Spinner />;
-    return user ? <>{children}</> : <ReactRouterDOM.Navigate to="/login" replace />;
+    return user ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
 const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { userData, loading } = useAuth();
     if (loading) return <Spinner />;
-    return userData?.role === 'Admin' ? <>{children}</> : <ReactRouterDOM.Navigate to="/" replace />;
+    return userData?.role === 'Admin' ? <>{children}</> : <Navigate to="/" replace />;
 };
 
 // --- Main App Component ---
@@ -837,23 +845,23 @@ const AppContent: React.FC = () => {
     }
     
     return (
-        <ReactRouterDOM.HashRouter>
+        <HashRouter>
             {user && <Header />}
             <main>
-                <ReactRouterDOM.Routes>
-                    <ReactRouterDOM.Route path="/login" element={<LoginPage />} />
-                    <ReactRouterDOM.Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-                    <ReactRouterDOM.Route path="/article/:id" element={<ProtectedRoute><ArticleEditorPage /></ProtectedRoute>} />
-                    <ReactRouterDOM.Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-                    <ReactRouterDOM.Route path="/experts" element={
+                <Routes>
+                    <Route path="/login" element={<LoginPage />} />
+                    <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+                    <Route path="/article/:id" element={<ProtectedRoute><ArticleEditorPage /></ProtectedRoute>} />
+                    <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+                    <Route path="/experts" element={
                         <ProtectedRoute>
                             <AdminRoute><ExpertManagementPage /></AdminRoute>
                         </ProtectedRoute>
                     } />
-                    <ReactRouterDOM.Route path="*" element={<ReactRouterDOM.Navigate to="/" />} />
-                </ReactRouterDOM.Routes>
+                    <Route path="*" element={<Navigate to="/" />} />
+                </Routes>
             </main>
-        </ReactRouterDOM.HashRouter>
+        </HashRouter>
     );
 };
 
