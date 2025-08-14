@@ -1,37 +1,11 @@
 import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
-import {
-  HashRouter,
-  Routes,
-  Route,
-  Link,
-  useNavigate,
-  Navigate,
-  useParams,
-} from 'react-router-dom';
-import { initializeApp, getApps, getApp, deleteApp } from 'firebase/app';
-import { 
-  getAuth, 
-  onAuthStateChanged, 
-  signInWithEmailAndPassword, 
-  signOut,
-  User as FirebaseUser,
-  sendPasswordResetEmail,
-  createUserWithEmailAndPassword
-} from 'firebase/auth';
-import { 
-  getFirestore, 
-  doc, 
-  getDoc, 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
-  updateDoc,
-  addDoc,
-  setDoc,
-  serverTimestamp,
-  orderBy
-} from 'firebase/firestore';
+import * as ReactRouterDom from 'react-router-dom';
+import * as firebaseApp from 'firebase/app';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, sendPasswordResetEmail, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import type { User as FirebaseUser } from 'firebase/auth';
+import { getFirestore, collection, doc, getDoc, updateDoc, addDoc, serverTimestamp, query, where, orderBy, getDocs } from 'firebase/firestore';
+
+
 import type { UserProfile, Article, ArticleStatus } from './types';
 import { ArticleStatus as ArticleStatusEnum } from './types';
 
@@ -49,7 +23,7 @@ const firebaseConfig = {
 
 
 // --- Firebase Initialization ---
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+const app = firebaseApp.getApps().length === 0 ? firebaseApp.initializeApp(firebaseConfig) : firebaseApp.getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
 
@@ -164,7 +138,7 @@ const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: string; chi
 
 const Header: React.FC = () => {
   const { userData } = useAuth();
-  const navigate = useNavigate();
+  const navigate = ReactRouterDom.useNavigate();
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -174,16 +148,16 @@ const Header: React.FC = () => {
   return (
     <header className="bg-brand-surface shadow-md sticky top-0 z-40">
       <div className="container mx-auto px-6 py-4 flex justify-between items-center">
-        <Link to="/" className="text-2xl font-bold text-brand-primary">
+        <ReactRouterDom.Link to="/" className="text-2xl font-bold text-brand-primary">
           Lumina Portal
-        </Link>
+        </ReactRouterDom.Link>
         {userData && (
           <nav className="flex items-center space-x-4">
              {userData.role === 'Admin' && (
-              <Link to="/experts" className="text-brand-text-secondary hover:text-brand-primary font-medium">Manage Experts</Link>
+              <ReactRouterDom.Link to="/experts" className="text-brand-text-secondary hover:text-brand-primary font-medium">Manage Experts</ReactRouterDom.Link>
             )}
             <span className="text-brand-text-secondary">
-              Welcome, <Link to="/profile" className="font-semibold text-brand-primary hover:underline">{userData.displayName}</Link> ({userData.role})
+              Welcome, <ReactRouterDom.Link to="/profile" className="font-semibold text-brand-primary hover:underline">{userData.displayName}</ReactRouterDom.Link> ({userData.role})
             </span>
             <button
               onClick={handleLogout}
@@ -207,7 +181,7 @@ const LoginPage: React.FC = () => {
   const [resetEmail, setResetEmail] = useState('');
   const [resetMessage, setResetMessage] = useState('');
 
-  const navigate = useNavigate();
+  const navigate = ReactRouterDom.useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -356,7 +330,7 @@ const DashboardPage: React.FC = () => {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {articles.map(article => (
-                        <Link to={`/article/${article.id}`} key={article.id} className="block bg-brand-surface rounded-lg shadow hover:shadow-xl transition-shadow duration-300 p-6">
+                        <ReactRouterDom.Link to={`/article/${article.id}`} key={article.id} className="block bg-brand-surface rounded-lg shadow hover:shadow-xl transition-shadow duration-300 p-6">
                             <div className="flex justify-between items-start mb-2">
                                 <h2 className="text-xl font-bold text-brand-text-primary pr-2">{article.title}</h2>
                                 <Badge status={article.status} />
@@ -368,7 +342,7 @@ const DashboardPage: React.FC = () => {
                              {article.status === ArticleStatusEnum.AwaitingExpertReview && !article.expertId && (
                                 <p className="text-sm text-yellow-600 font-semibold">Ready for expert review.</p>
                             )}
-                        </Link>
+                        </ReactRouterDom.Link>
                     ))}
                 </div>
             )}
@@ -388,9 +362,9 @@ const DashboardPage: React.FC = () => {
 };
 
 const ArticleEditorPage: React.FC = () => {
-    const { id } = useParams<{ id: string }>();
+    const { id } = ReactRouterDom.useParams<{ id: string }>();
     const { userData } = useAuth();
-    const navigate = useNavigate();
+    const navigate = ReactRouterDom.useNavigate();
     const [article, setArticle] = useState<Article | null>(null);
     const [loading, setLoading] = useState(true);
     const [flashContent, setFlashContent] = useState('');
@@ -429,13 +403,13 @@ const ArticleEditorPage: React.FC = () => {
         }
     };
     
-    const handleClaim = () => {
-        if (!userData) return;
+    const handleClaim = async () => {
+        if (!userData || !id) return;
         const newUpdates = {
             expertId: userData.uid,
             expertDisplayName: userData.displayName,
         };
-        updateDoc(doc(db, 'articles', id!), newUpdates);
+        await updateDoc(doc(db, 'articles', id), newUpdates);
         setArticle(prev => prev ? {...prev, ...newUpdates} : null);
     };
 
@@ -648,10 +622,10 @@ const ExpertManagementPage: React.FC = () => {
                    return;
                 }
                 // Use a temporary app instance to create the user without signing in the current admin
-                const tempApp = initializeApp(firebaseConfig, 'temp-user-creation' + Date.now());
+                const tempApp = firebaseApp.initializeApp(firebaseConfig, 'temp-user-creation' + Date.now());
                 const tempAuth = getAuth(tempApp);
                 const userCredential = await createUserWithEmailAndPassword(tempAuth, expertData.email, password);
-                const newUid = userCredential.user.uid;
+                const newUid = userCredential.user!.uid;
                 
                 const newUserProfile: Omit<UserProfile, 'uid'> = {
                     email: expertData.email,
@@ -661,10 +635,12 @@ const ExpertManagementPage: React.FC = () => {
                     showNameToPublic: false,
                     categories: expertData.categories || []
                 };
+                
+                // Using a plain object for setDoc
+                await updateDoc(doc(db, 'users', newUid), newUserProfile);
 
-                await setDoc(doc(db, 'users', newUid), newUserProfile);
                 await signOut(tempAuth);
-                await deleteApp(tempApp);
+                await firebaseApp.deleteApp(tempApp);
                 alert("Expert created successfully.");
             }
             handleModalClose();
@@ -812,16 +788,16 @@ const ExpertEditModal: React.FC<{ isOpen: boolean; onClose: () => void; expert: 
 };
 
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const ProtectedRoute: React.FC<{ element: React.ReactElement }> = ({ element }) => {
     const { user, loading } = useAuth();
     if (loading) return <Spinner />;
-    return user ? <>{children}</> : <Navigate to="/login" replace />;
+    return user ? element : <ReactRouterDom.Navigate to="/login" replace />;
 };
 
-const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const AdminRoute: React.FC<{ element: React.ReactElement }> = ({ element }) => {
     const { userData, loading } = useAuth();
     if (loading) return <Spinner />;
-    return userData?.role === 'Admin' ? <>{children}</> : <Navigate to="/" replace />;
+    return userData?.role === 'Admin' ? element : <ReactRouterDom.Navigate to="/" replace />;
 };
 
 // --- Main App Component ---
@@ -845,23 +821,19 @@ const AppContent: React.FC = () => {
     }
     
     return (
-        <HashRouter>
+        <ReactRouterDom.HashRouter>
             {user && <Header />}
             <main>
-                <Routes>
-                    <Route path="/login" element={<LoginPage />} />
-                    <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-                    <Route path="/article/:id" element={<ProtectedRoute><ArticleEditorPage /></ProtectedRoute>} />
-                    <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-                    <Route path="/experts" element={
-                        <ProtectedRoute>
-                            <AdminRoute><ExpertManagementPage /></AdminRoute>
-                        </ProtectedRoute>
-                    } />
-                    <Route path="*" element={<Navigate to="/" />} />
-                </Routes>
+                <ReactRouterDom.Routes>
+                    <ReactRouterDom.Route path="/login" element={<LoginPage />} />
+                    <ReactRouterDom.Route path="/" element={<ProtectedRoute element={<DashboardPage />} />} />
+                    <ReactRouterDom.Route path="/article/:id" element={<ProtectedRoute element={<ArticleEditorPage />} />} />
+                    <ReactRouterDom.Route path="/profile" element={<ProtectedRoute element={<ProfilePage />} />} />
+                    <ReactRouterDom.Route path="/experts" element={<AdminRoute element={<ExpertManagementPage />} />} />
+                    <ReactRouterDom.Route path="*" element={<ReactRouterDom.Navigate to="/" replace />} />
+                </ReactRouterDom.Routes>
             </main>
-        </HashRouter>
+        </ReactRouterDom.HashRouter>
     );
 };
 
