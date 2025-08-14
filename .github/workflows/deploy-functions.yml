@@ -19,7 +19,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           # FIX: Use Node.js v18 to match the engine requirement in functions/package.json
-          node-version: 18 
+          node-version: 18
+          # Use npm's built-in caching via the setup-node action
+          cache: 'npm'
+          cache-dependency-path: ./functions/package-lock.json
 
       - name: Install Function Dependencies
         run: npm ci
