@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import React, { useState, useEffect, useCallback, createContext, useContext, useMemo } from 'react';
 import * as ReactRouterDom from 'react-router-dom';
 import * as firebaseApp from 'firebase/app';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, sendPasswordResetEmail, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
-import type { User as FirebaseUser } from 'firebase/auth';
+import * as firebaseAuth from 'firebase/auth';
 import { getFirestore, collection, doc, getDoc, updateDoc, addDoc, serverTimestamp, query, where, orderBy, getDocs } from 'firebase/firestore';
 
 
@@ -24,7 +23,7 @@ const firebaseConfig = {
 
 // --- Firebase Initialization ---
 const app = firebaseApp.getApps().length === 0 ? firebaseApp.initializeApp(firebaseConfig) : firebaseApp.getApp();
-const auth = getAuth(app);
+const auth = firebaseAuth.getAuth(app);
 const db = getFirestore(app);
 
 // --- App-wide Constants ---
@@ -43,7 +42,7 @@ const CATEGORIES = [
 
 // --- Authentication Context ---
 interface AuthContextType {
-  user: FirebaseUser | null;
+  user: firebaseAuth.User | null;
   userData: UserProfile | null;
   loading: boolean;
 }
@@ -51,12 +50,12 @@ const AuthContext = createContext<AuthContextType>({ user: null, userData: null,
 const useAuth = () => useContext(AuthContext);
 
 const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
-  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [user, setUser] = useState<firebaseAuth.User | null>(null);
   const [userData, setUserData] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = firebaseAuth.onAuthStateChanged(auth, async (firebaseUser) => {
       setLoading(true);
       if (firebaseUser) {
         const userDocRef = doc(db, 'users', firebaseUser.uid);
@@ -64,7 +63,7 @@ const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
         if (userDocSnap.exists()) {
           const fetchedUserData = { uid: firebaseUser.uid, ...userDocSnap.data() } as UserProfile;
           if (fetchedUserData.status === 'disabled') {
-              await signOut(auth);
+              await firebaseAuth.signOut(auth);
               setUser(null);
               setUserData(null);
               alert('Your account has been disabled. Please contact an administrator.');
@@ -75,7 +74,7 @@ const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
         } else {
           // User exists in Auth but not Firestore, log them out.
           setUserData(null);
-          await signOut(auth);
+          await firebaseAuth.signOut(auth);
         }
       } else {
         setUser(null);
@@ -141,7 +140,7 @@ const Header: React.FC = () => {
   const navigate = ReactRouterDom.useNavigate();
 
   const handleLogout = async () => {
-    await signOut(auth);
+    await firebaseAuth.signOut(auth);
     navigate('/login');
   };
 
@@ -188,7 +187,7 @@ const LoginPage: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      await firebaseAuth.signInWithEmailAndPassword(auth, email, password);
       navigate('/');
     } catch (err: any) {
       setError(err.message || 'Failed to login. Please check your credentials.');
@@ -203,7 +202,7 @@ const LoginPage: React.FC = () => {
           return;
       }
       try {
-          await sendPasswordResetEmail(auth, resetEmail);
+          await firebaseAuth.sendPasswordResetEmail(auth, resetEmail);
           setResetMessage("Success! If an account with that email exists, a password reset link has been sent.");
       } catch (error: any) {
           setResetMessage(`Error: ${error.message}`);
@@ -252,6 +251,8 @@ const DashboardPage: React.FC = () => {
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
     const [newTitle, setNewTitle] = useState('');
     const [newCategory, setNewCategory] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
+    const [categoryFilter, setCategoryFilter] = useState('all');
 
     const fetchArticles = useCallback(async () => {
         if (!userData) return;
@@ -259,32 +260,16 @@ const DashboardPage: React.FC = () => {
         let articlesQuery;
 
         if (userData.role === 'Admin') {
-            articlesQuery = query(collection(db, 'articles'), where('status', '==', ArticleStatusEnum.AwaitingAdminReview), orderBy('createdAt', 'desc'));
+            // Admin can see everything, including drafts, ordered by creation date
+            articlesQuery = query(collection(db, 'articles'), orderBy('createdAt', 'desc'));
         } else { // Expert
-            articlesQuery = query(collection(db, 'articles'), where('status', 'in', [ArticleStatusEnum.AwaitingExpertReview, ArticleStatusEnum.NeedsRevision]), orderBy('createdAt', 'desc'));
+            // Experts see everything except drafts. Client-side logic will filter for relevance.
+            // This requires a composite index on (status, createdAt)
+            articlesQuery = query(collection(db, 'articles'), where('status', '!=', 'Draft'), orderBy('status'), orderBy('createdAt', 'desc'));
         }
         
         const querySnapshot = await getDocs(articlesQuery);
-        let fetchedArticles = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Article));
-
-        if (userData.role === 'Expert') {
-            fetchedArticles = fetchedArticles.filter(art => {
-                // Show unclaimed articles in the expert's categories
-                if(art.status === ArticleStatusEnum.AwaitingExpertReview && !art.expertId && userData.categories?.includes(art.category)) {
-                    return true;
-                }
-                // Show articles sent back for revision to this specific expert
-                if(art.status === ArticleStatusEnum.NeedsRevision && art.expertId === userData.uid) {
-                    return true;
-                }
-                // Show articles claimed by this expert but not yet submitted
-                 if(art.status === ArticleStatusEnum.AwaitingExpertReview && art.expertId === userData.uid) {
-                    return true;
-                }
-                return false;
-            });
-        }
-        
+        const fetchedArticles = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Article));
         setArticles(fetchedArticles);
         setLoading(false);
     }, [userData]);
@@ -293,8 +278,35 @@ const DashboardPage: React.FC = () => {
         fetchArticles();
     }, [fetchArticles]);
     
+    const filteredArticles = useMemo(() => {
+        let processedArticles = [...articles];
+
+        if (statusFilter !== 'all') {
+            processedArticles = processedArticles.filter(art => art.status === statusFilter);
+        }
+
+        if (categoryFilter !== 'all') {
+            processedArticles = processedArticles.filter(art => art.category === categoryFilter);
+        }
+
+        // For experts, apply special visibility rules over the pre-filtered (non-draft) list
+        if (userData?.role === 'Expert') {
+            processedArticles = processedArticles.filter(art => {
+                const isUnclaimedInMyCategory = art.status === ArticleStatusEnum.AwaitingExpertReview && !art.expertId && userData.categories?.includes(art.category);
+                const isAssignedToMe = art.expertId === userData.uid;
+                const isPublished = art.status === ArticleStatusEnum.Published;
+                return isUnclaimedInMyCategory || isAssignedToMe || isPublished;
+            });
+        }
+        
+        return processedArticles;
+    }, [articles, statusFilter, categoryFilter, userData]);
+
     const handleCreateDraft = async () => {
-        if (!newTitle || !newCategory) return alert("Title and Category are required.");;
+        if (!newTitle || !newCategory) {
+            alert("Title and Category are required.");
+            return;
+        }
         try {
             await addDoc(collection(db, 'articles'), {
                 title: newTitle,
@@ -306,6 +318,7 @@ const DashboardPage: React.FC = () => {
             setNewCategory('');
             setCreateModalOpen(false);
             alert('Draft created! The AI will now generate content.');
+            fetchArticles(); // Refresh the list to show the new draft
         } catch (error) {
             console.error("Error creating draft:", error);
             alert('Failed to create draft.');
@@ -317,7 +330,7 @@ const DashboardPage: React.FC = () => {
     return (
         <div className="container mx-auto px-6 py-8">
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-brand-text-primary">{userData?.role} Dashboard</h1>
+                <h1 className="text-3xl font-bold text-brand-text-primary">Article Management</h1>
                 {userData?.role === 'Admin' && (
                     <button onClick={() => setCreateModalOpen(true)} className="px-4 py-2 bg-brand-primary text-white rounded-md hover:bg-indigo-700 transition">
                         + Create New Draft
@@ -325,23 +338,41 @@ const DashboardPage: React.FC = () => {
                 )}
             </div>
 
-            {articles.length === 0 ? (
-                <p className="text-center text-brand-text-secondary mt-12 text-lg">No articles require your attention at this time.</p>
+            <div className="bg-brand-surface rounded-lg shadow p-4 mb-6 flex flex-col md:flex-row items-center gap-4">
+                <h3 className="text-lg font-semibold text-brand-text-primary">Filters:</h3>
+                <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-full md:w-auto px-4 py-2 border rounded-md">
+                    <option value="all">All Statuses</option>
+                    {Object.values(ArticleStatusEnum).map(status => (
+                        <option key={status} value={status}>{status.replace(/([A-Z])/g, ' $1').trim()}</option>
+                    ))}
+                </select>
+                <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="w-full md:w-auto px-4 py-2 border rounded-md">
+                    <option value="all">All Categories</option>
+                    {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                </select>
+            </div>
+
+            {filteredArticles.length === 0 ? (
+                <p className="text-center text-brand-text-secondary mt-12 text-lg">
+                    {articles.length === 0 ? "No articles found in the system." : "No articles match your current filters."}
+                </p>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {articles.map(article => (
+                    {filteredArticles.map(article => (
                         <ReactRouterDom.Link to={`/article/${article.id}`} key={article.id} className="block bg-brand-surface rounded-lg shadow hover:shadow-xl transition-shadow duration-300 p-6">
                             <div className="flex justify-between items-start mb-2">
                                 <h2 className="text-xl font-bold text-brand-text-primary pr-2">{article.title}</h2>
                                 <Badge status={article.status} />
                             </div>
                             <p className="text-brand-text-secondary mb-4">Category: {article.category}</p>
-                            {article.status === ArticleStatusEnum.NeedsRevision && (article.expertId === userData?.uid || userData?.role === 'Admin') && (
-                               <p className="text-sm text-red-600 font-semibold">Admin sent this back for revision.</p>
-                            )}
-                             {article.status === ArticleStatusEnum.AwaitingExpertReview && !article.expertId && (
-                                <p className="text-sm text-yellow-600 font-semibold">Ready for expert review.</p>
-                            )}
+                            <div className="text-sm font-semibold mt-auto pt-2">
+                                {article.status === ArticleStatusEnum.Draft && <p className="text-gray-600">AI content generation in progress...</p>}
+                                {article.status === ArticleStatusEnum.NeedsRevision && <p className="text-red-600">Revision needed.</p>}
+                                {article.status === ArticleStatusEnum.AwaitingExpertReview && !article.expertId && <p className="text-yellow-600">Ready for expert review.</p>}
+                                {article.status === ArticleStatusEnum.AwaitingExpertReview && article.expertId && <p className="text-yellow-800">In review with {article.expertDisplayName}.</p>}
+                                {article.status === ArticleStatusEnum.AwaitingAdminReview && <p className="text-blue-600">Ready for admin review.</p>}
+                                {article.status === ArticleStatusEnum.Published && <p className="text-green-600">Published on {article.publishedAt?.toDate().toLocaleDateString()}</p>}
+                            </div>
                         </ReactRouterDom.Link>
                     ))}
                 </div>
@@ -623,8 +654,8 @@ const ExpertManagementPage: React.FC = () => {
                 }
                 // Use a temporary app instance to create the user without signing in the current admin
                 const tempApp = firebaseApp.initializeApp(firebaseConfig, 'temp-user-creation' + Date.now());
-                const tempAuth = getAuth(tempApp);
-                const userCredential = await createUserWithEmailAndPassword(tempAuth, expertData.email, password);
+                const tempAuth = firebaseAuth.getAuth(tempApp);
+                const userCredential = await firebaseAuth.createUserWithEmailAndPassword(tempAuth, expertData.email, password);
                 const newUid = userCredential.user!.uid;
                 
                 const newUserProfile: Omit<UserProfile, 'uid'> = {
@@ -639,7 +670,7 @@ const ExpertManagementPage: React.FC = () => {
                 // Using a plain object for setDoc
                 await updateDoc(doc(db, 'users', newUid), newUserProfile);
 
-                await signOut(tempAuth);
+                await firebaseAuth.signOut(tempAuth);
                 await firebaseApp.deleteApp(tempApp);
                 alert("Expert created successfully.");
             }
