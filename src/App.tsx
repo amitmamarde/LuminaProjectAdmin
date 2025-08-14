@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
-import { HashRouter, Routes, Route, Link, useNavigate, useParams, Navigate } from 'react-router-dom';
-import { initializeApp, deleteApp, getApp, getApps } from 'firebase/app';
+import { 
+  HashRouter,
+  Routes,
+  Route,
+  Link,
+  useNavigate,
+  useParams,
+  Navigate,
+} from 'react-router-dom';
+import { initializeApp, getApps, getApp, deleteApp } from 'firebase/app';
 import { 
   getAuth, 
   onAuthStateChanged, 
