@@ -15,12 +15,11 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      - name: Setup Node.js v18
+      - name: Setup Node.js v20
         uses: actions/setup-node@v4
         with:
-          # FIX: Use Node.js v18 to match the engine requirement in functions/package.json
-          node-version: 18
-          # Use npm's built-in caching via the setup-node action
+          # CORRECT: Use Node.js v20 to match your package.json engine requirement
+          node-version: 20
           cache: 'npm'
           cache-dependency-path: ./functions/package-lock.json
 
