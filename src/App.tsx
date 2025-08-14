@@ -1,7 +1,15 @@
 import React, { useState, useEffect, useCallback, createContext, useContext, useMemo } from 'react';
 import * as ReactRouterDom from 'react-router-dom';
 import * as firebaseApp from 'firebase/app';
-import * as firebaseAuth from 'firebase/auth';
+import {
+  getAuth,
+  onAuthStateChanged,
+  signOut,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  createUserWithEmailAndPassword,
+  type User,
+} from 'firebase/auth';
 import { getFirestore, collection, doc, getDoc, updateDoc, addDoc, serverTimestamp, query, where, orderBy, getDocs } from 'firebase/firestore';
 
 
@@ -23,7 +31,7 @@ const firebaseConfig = {
 
 // --- Firebase Initialization ---
 const app = firebaseApp.getApps().length === 0 ? firebaseApp.initializeApp(firebaseConfig) : firebaseApp.getApp();
-const auth = firebaseAuth.getAuth(app);
+const auth = getAuth(app);
 const db = getFirestore(app);
 
 // --- App-wide Constants ---
@@ -42,7 +50,7 @@ const CATEGORIES = [
 
 // --- Authentication Context ---
 interface AuthContextType {
-  user: firebaseAuth.User | null;
+  user: User | null;
   userData: UserProfile | null;
   loading: boolean;
 }
@@ -50,12 +58,12 @@ const AuthContext = createContext<AuthContextType>({ user: null, userData: null,
 const useAuth = () => useContext(AuthContext);
 
 const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
-  const [user, setUser] = useState<firebaseAuth.User | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [userData, setUserData] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = firebaseAuth.onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setLoading(true);
       if (firebaseUser) {
         const userDocRef = doc(db, 'users', firebaseUser.uid);
@@ -63,7 +71,7 @@ const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
         if (userDocSnap.exists()) {
           const fetchedUserData = { uid: firebaseUser.uid, ...userDocSnap.data() } as UserProfile;
           if (fetchedUserData.status === 'disabled') {
-              await firebaseAuth.signOut(auth);
+              await signOut(auth);
               setUser(null);
               setUserData(null);
               alert('Your account has been disabled. Please contact an administrator.');
@@ -74,7 +82,7 @@ const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
         } else {
           // User exists in Auth but not Firestore, log them out.
           setUserData(null);
-          await firebaseAuth.signOut(auth);
+          await signOut(auth);
         }
       } else {
         setUser(null);
@@ -140,7 +148,7 @@ const Header: React.FC = () => {
   const navigate = ReactRouterDom.useNavigate();
 
   const handleLogout = async () => {
-    await firebaseAuth.signOut(auth);
+    await signOut(auth);
     navigate('/login');
   };
 
@@ -187,7 +195,7 @@ const LoginPage: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      await firebaseAuth.signInWithEmailAndPassword(auth, email, password);
+      await signInWithEmailAndPassword(auth, email, password);
       navigate('/');
     } catch (err: any) {
       setError(err.message || 'Failed to login. Please check your credentials.');
@@ -202,7 +210,7 @@ const LoginPage: React.FC = () => {
           return;
       }
       try {
-          await firebaseAuth.sendPasswordResetEmail(auth, resetEmail);
+          await sendPasswordResetEmail(auth, resetEmail);
           setResetMessage("Success! If an account with that email exists, a password reset link has been sent.");
       } catch (error: any) {
           setResetMessage(`Error: ${error.message}`);
@@ -260,8 +268,9 @@ const DashboardPage: React.FC = () => {
         let articlesQuery;
 
         if (userData.role === 'Admin') {
-            // Admin can see everything, including drafts, ordered by creation date
-            articlesQuery = query(collection(db, 'articles'), orderBy('createdAt', 'desc'));
+            // Admin can see everything. Removing ordering to ensure all documents are fetched
+            // regardless of 'createdAt' field status. This is a more robust query.
+            articlesQuery = query(collection(db, 'articles'));
         } else { // Expert
             // Experts see everything except drafts. Client-side logic will filter for relevance.
             // This requires a composite index on (status, createdAt)
@@ -654,8 +663,8 @@ const ExpertManagementPage: React.FC = () => {
                 }
                 // Use a temporary app instance to create the user without signing in the current admin
                 const tempApp = firebaseApp.initializeApp(firebaseConfig, 'temp-user-creation' + Date.now());
-                const tempAuth = firebaseAuth.getAuth(tempApp);
-                const userCredential = await firebaseAuth.createUserWithEmailAndPassword(tempAuth, expertData.email, password);
+                const tempAuth = getAuth(tempApp);
+                const userCredential = await createUserWithEmailAndPassword(tempAuth, expertData.email, password);
                 const newUid = userCredential.user!.uid;
                 
                 const newUserProfile: Omit<UserProfile, 'uid'> = {
@@ -670,7 +679,7 @@ const ExpertManagementPage: React.FC = () => {
                 // Using a plain object for setDoc
                 await updateDoc(doc(db, 'users', newUid), newUserProfile);
 
-                await firebaseAuth.signOut(tempAuth);
+                await signOut(tempAuth);
                 await firebaseApp.deleteApp(tempApp);
                 alert("Expert created successfully.");
             }
