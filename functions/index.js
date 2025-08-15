@@ -6,7 +6,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 // Initialize Firebase Admin SDK to interact with Firestore and Storage
 admin.initializeApp();
 
-// --- AI and Cloud Services Configuration ---
+// ---AI and Cloud Services Configuration ---
 // In modern Node.js runtimes for Firebase Functions (Node 10+), configuration variables
 // set via the Firebase CLI are automatically available as environment variables.
 // The key 'gemini.key' becomes the environment variable 'GEMINI_KEY'.
