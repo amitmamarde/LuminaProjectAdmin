@@ -18,7 +18,6 @@ jobs:
       - name: Setup Node.js v20
         uses: actions/setup-node@v4
         with:
-          # CORRECT: Use Node.js v20 to match your package.json engine requirement
           node-version: 20
           cache: 'npm'
           cache-dependency-path: ./functions/package-lock.json
@@ -34,6 +33,9 @@ jobs:
 
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
+
+      - name: Set Gemini API Key
+        run: firebase functions:config:set gemini.key="${{ secrets.GEMINI_API_KEY }}" --project ${{ secrets.GCP_PROJECT_ID }} --non-interactive
 
       - name: Deploy to Firebase
         run: firebase deploy --only functions --project ${{ secrets.GCP_PROJECT_ID }} --non-interactive
