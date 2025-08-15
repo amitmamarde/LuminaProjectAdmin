@@ -7,11 +7,11 @@ import { GoogleGenAI, Type } from "@google/genai";
 admin.initializeApp();
 
 // --- AI and Cloud Services Configuration ---
-// In an ES Module environment, functions.config() is not available directly.
-// We manually parse the configuration from the environment variable set by the Firebase CLI.
-// Your command `firebase functions:config:set gemini.key="YOUR_API_KEY_HERE"` makes the key available here.
-const config = JSON.parse(process.env.FIREBASE_CONFIG || '{}');
-const geminiApiKey = config.gemini?.key;
+// In modern Node.js runtimes for Firebase Functions (Node 10+), configuration variables
+// set via the Firebase CLI are automatically available as environment variables.
+// The key 'gemini.key' becomes the environment variable 'GEMINI_KEY'.
+// Run `firebase functions:config:set gemini.key="YOUR_API_KEY_HERE"` to set this value.
+const geminiApiKey = process.env.GEMINI_KEY;
 
 const db = admin.firestore();
 const storage = admin.storage();
@@ -37,7 +37,7 @@ export const generateArticleContent = functions.region("europe-west1").firestore
       return;
     }
     
-    // The API key is available from the parsed config.
+    // The API key is available from the environment variable.
     const ai = new GoogleGenAI({ apiKey: geminiApiKey });
 
     if (!snapshot) {
