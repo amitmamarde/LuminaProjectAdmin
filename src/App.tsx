@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useCallback, createContext, useContext, useMemo } from 'react';
-import * as ReactRouterDom from 'react-router-dom';
-import * as firebaseApp from 'firebase/app';
+import {
+  HashRouter,
+  Link,
+  Navigate,
+  Route,
+  Routes,
+  useNavigate,
+  useParams,
+} from 'react-router-dom';
+import { initializeApp, getApps, getApp, deleteApp } from 'firebase/app';
 import {
   getAuth,
   onAuthStateChanged,
@@ -10,7 +18,8 @@ import {
   createUserWithEmailAndPassword,
   type User,
 } from 'firebase/auth';
-import { getFirestore, collection, doc, getDoc, updateDoc, addDoc, serverTimestamp, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, doc, getDoc, updateDoc, addDoc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc } from 'firebase/firestore';
+import { getStorage, ref, deleteObject } from 'firebase/storage';
 
 
 import type { UserProfile, Article, ArticleStatus } from './types';
@@ -30,9 +39,10 @@ const firebaseConfig = {
 
 
 // --- Firebase Initialization ---
-const app = firebaseApp.getApps().length === 0 ? firebaseApp.initializeApp(firebaseConfig) : firebaseApp.getApp();
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
+const storage = getStorage(app);
 
 // --- App-wide Constants ---
 const CATEGORIES = [
@@ -145,7 +155,7 @@ const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: string; chi
 
 const Header: React.FC = () => {
   const { userData } = useAuth();
-  const navigate = ReactRouterDom.useNavigate();
+  const navigate = useNavigate();
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -155,16 +165,16 @@ const Header: React.FC = () => {
   return (
     <header className="bg-brand-surface shadow-md sticky top-0 z-40">
       <div className="container mx-auto px-6 py-4 flex justify-between items-center">
-        <ReactRouterDom.Link to="/" className="text-2xl font-bold text-brand-primary">
+        <Link to="/" className="text-2xl font-bold text-brand-primary">
           Lumina Portal
-        </ReactRouterDom.Link>
+        </Link>
         {userData && (
           <nav className="flex items-center space-x-4">
              {userData.role === 'Admin' && (
-              <ReactRouterDom.Link to="/experts" className="text-brand-text-secondary hover:text-brand-primary font-medium">Manage Experts</ReactRouterDom.Link>
+              <Link to="/experts" className="text-brand-text-secondary hover:text-brand-primary font-medium">Manage Experts</Link>
             )}
             <span className="text-brand-text-secondary">
-              Welcome, <ReactRouterDom.Link to="/profile" className="font-semibold text-brand-primary hover:underline">{userData.displayName}</ReactRouterDom.Link> ({userData.role})
+              Welcome, <Link to="/profile" className="font-semibold text-brand-primary hover:underline">{userData.displayName}</Link> ({userData.role})
             </span>
             <button
               onClick={handleLogout}
@@ -188,7 +198,7 @@ const LoginPage: React.FC = () => {
   const [resetEmail, setResetEmail] = useState('');
   const [resetMessage, setResetMessage] = useState('');
 
-  const navigate = ReactRouterDom.useNavigate();
+  const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -258,7 +268,8 @@ const DashboardPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
     const [newTitle, setNewTitle] = useState('');
-    const [newCategory, setNewCategory] = useState('');
+    const [newShortDescription, setNewShortDescription] = useState('');
+    const [newCategories, setNewCategories] = useState<string[]>([]);
     const [statusFilter, setStatusFilter] = useState('all');
     const [categoryFilter, setCategoryFilter] = useState('all');
 
@@ -268,12 +279,8 @@ const DashboardPage: React.FC = () => {
         let articlesQuery;
 
         if (userData.role === 'Admin') {
-            // Admin can see everything. Removing ordering to ensure all documents are fetched
-            // regardless of 'createdAt' field status. This is a more robust query.
             articlesQuery = query(collection(db, 'articles'));
         } else { // Expert
-            // Experts see everything except drafts. Client-side logic will filter for relevance.
-            // This requires a composite index on (status, createdAt)
             articlesQuery = query(collection(db, 'articles'), where('status', '!=', 'Draft'), orderBy('status'), orderBy('createdAt', 'desc'));
         }
         
@@ -295,13 +302,12 @@ const DashboardPage: React.FC = () => {
         }
 
         if (categoryFilter !== 'all') {
-            processedArticles = processedArticles.filter(art => art.category === categoryFilter);
+            processedArticles = processedArticles.filter(art => art.categories?.includes(categoryFilter));
         }
 
-        // For experts, apply special visibility rules over the pre-filtered (non-draft) list
         if (userData?.role === 'Expert') {
             processedArticles = processedArticles.filter(art => {
-                const isUnclaimedInMyCategory = art.status === ArticleStatusEnum.AwaitingExpertReview && !art.expertId && userData.categories?.includes(art.category);
+                const isUnclaimedInMyCategory = art.status === ArticleStatusEnum.AwaitingExpertReview && !art.expertId && art.categories?.some(cat => userData.categories?.includes(cat));
                 const isAssignedToMe = art.expertId === userData.uid;
                 const isPublished = art.status === ArticleStatusEnum.Published;
                 return isUnclaimedInMyCategory || isAssignedToMe || isPublished;
@@ -312,19 +318,21 @@ const DashboardPage: React.FC = () => {
     }, [articles, statusFilter, categoryFilter, userData]);
 
     const handleCreateDraft = async () => {
-        if (!newTitle || !newCategory) {
-            alert("Title and Category are required.");
+        if (!newTitle || newCategories.length === 0) {
+            alert("Title and at least one category are required.");
             return;
         }
         try {
             await addDoc(collection(db, 'articles'), {
                 title: newTitle,
-                category: newCategory,
+                shortDescription: newShortDescription,
+                categories: newCategories,
                 status: ArticleStatusEnum.Draft,
                 createdAt: serverTimestamp(),
             });
             setNewTitle('');
-            setNewCategory('');
+            setNewShortDescription('');
+            setNewCategories([]);
             setCreateModalOpen(false);
             alert('Draft created! The AI will now generate content.');
             fetchArticles(); // Refresh the list to show the new draft
@@ -332,6 +340,19 @@ const DashboardPage: React.FC = () => {
             console.error("Error creating draft:", error);
             alert('Failed to create draft.');
         }
+    };
+
+    const handleCategoryChange = (category: string) => {
+        setNewCategories(prev => {
+            if (prev.includes(category)) {
+                return prev.filter(c => c !== category);
+            }
+            if (prev.length < 3) {
+                return [...prev, category];
+            }
+            alert("You can select a maximum of 3 categories.");
+            return prev;
+        });
     };
 
     if (loading) return <Spinner />;
@@ -368,12 +389,12 @@ const DashboardPage: React.FC = () => {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredArticles.map(article => (
-                        <ReactRouterDom.Link to={`/article/${article.id}`} key={article.id} className="block bg-brand-surface rounded-lg shadow hover:shadow-xl transition-shadow duration-300 p-6">
+                        <Link to={`/article/${article.id}`} key={article.id} className="block bg-brand-surface rounded-lg shadow hover:shadow-xl transition-shadow duration-300 p-6">
                             <div className="flex justify-between items-start mb-2">
                                 <h2 className="text-xl font-bold text-brand-text-primary pr-2">{article.title}</h2>
                                 <Badge status={article.status} />
                             </div>
-                            <p className="text-brand-text-secondary mb-4">Category: {article.category}</p>
+                            <p className="text-brand-text-secondary text-sm mb-4">Categories: {article.categories?.join(', ')}</p>
                             <div className="text-sm font-semibold mt-auto pt-2">
                                 {article.status === ArticleStatusEnum.Draft && <p className="text-gray-600">AI content generation in progress...</p>}
                                 {article.status === ArticleStatusEnum.NeedsRevision && <p className="text-red-600">Revision needed.</p>}
@@ -382,7 +403,7 @@ const DashboardPage: React.FC = () => {
                                 {article.status === ArticleStatusEnum.AwaitingAdminReview && <p className="text-blue-600">Ready for admin review.</p>}
                                 {article.status === ArticleStatusEnum.Published && <p className="text-green-600">Published on {article.publishedAt?.toDate().toLocaleDateString()}</p>}
                             </div>
-                        </ReactRouterDom.Link>
+                        </Link>
                     ))}
                 </div>
             )}
@@ -390,10 +411,18 @@ const DashboardPage: React.FC = () => {
             <Modal isOpen={isCreateModalOpen} onClose={() => setCreateModalOpen(false)} title="Create New Draft">
                 <div className="space-y-4">
                     <input type="text" placeholder="Article Title" value={newTitle} onChange={e => setNewTitle(e.target.value)} className="w-full px-4 py-2 border rounded-md" />
-                    <select value={newCategory} onChange={e => setNewCategory(e.target.value)} className="w-full px-4 py-2 border rounded-md">
-                        <option value="" disabled>Select a category</option>
-                        {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                    </select>
+                    <textarea placeholder="Short Description (Optional) - provide context for the AI" value={newShortDescription} onChange={e => setNewShortDescription(e.target.value)} className="w-full px-4 py-2 border rounded-md h-24 resize-y" />
+                    <div>
+                        <h4 className="font-semibold mb-2">Categories (Select up to 3)</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1 border rounded-md">
+                            {CATEGORIES.map(cat => (
+                                <label key={cat} className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-100 cursor-pointer">
+                                    <input type="checkbox" checked={newCategories.includes(cat)} onChange={() => handleCategoryChange(cat)} className="h-4 w-4 text-brand-primary focus:ring-brand-primary border-gray-300 rounded" />
+                                    <span className="text-sm">{cat}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
                     <button onClick={handleCreateDraft} className="w-full bg-brand-primary text-white py-2 rounded-md hover:bg-indigo-700">Create & Trigger AI</button>
                 </div>
             </Modal>
@@ -402,14 +431,15 @@ const DashboardPage: React.FC = () => {
 };
 
 const ArticleEditorPage: React.FC = () => {
-    const { id } = ReactRouterDom.useParams<{ id: string }>();
+    const { id } = useParams<{ id: string }>();
     const { userData } = useAuth();
-    const navigate = ReactRouterDom.useNavigate();
+    const navigate = useNavigate();
     const [article, setArticle] = useState<Article | null>(null);
     const [loading, setLoading] = useState(true);
     const [flashContent, setFlashContent] = useState('');
     const [deepDiveContent, setDeepDiveContent] = useState('');
     const [isRevisionModalOpen, setRevisionModalOpen] = useState(false);
+    const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
     const [revisionNotes, setRevisionNotes] = useState('');
 
     useEffect(() => {
@@ -440,6 +470,30 @@ const ArticleEditorPage: React.FC = () => {
         } catch(e) {
             console.error(e);
             alert('Failed to update article.');
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!id || !article) return;
+        setLoading(true);
+        try {
+            if (article.imageUrl) {
+                try {
+                    const fileRef = ref(storage, `articles/${id}/header.jpg`);
+                    await deleteObject(fileRef);
+                } catch (storageError: any) {
+                    console.error("Could not delete storage file, it might not exist:", storageError);
+                }
+            }
+            await deleteDoc(doc(db, 'articles', id));
+            alert('Article deleted successfully.');
+            navigate('/');
+        } catch(e) {
+            console.error("Error deleting article:", e);
+            alert('Failed to delete article.');
+            setLoading(false);
+        } finally {
+            setDeleteModalOpen(false);
         }
     };
     
@@ -492,7 +546,7 @@ const ArticleEditorPage: React.FC = () => {
                 <div className="flex justify-between items-start mb-4">
                     <div>
                         <h1 className="text-4xl font-extrabold text-brand-text-primary">{article.title}</h1>
-                        <p className="text-brand-text-secondary mt-1">Category: {article.category}</p>
+                        <p className="text-brand-text-secondary mt-1">Categories: {article.categories?.join(', ')}</p>
                     </div>
                     <Badge status={article.status} />
                 </div>
@@ -517,8 +571,8 @@ const ArticleEditorPage: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="mt-8 pt-6 border-t flex justify-end space-x-4">
-                    {userData.role === 'Expert' && article.status === ArticleStatusEnum.AwaitingExpertReview && !article.expertId && userData.categories?.includes(article.category) &&(
+                <div className="mt-8 pt-6 border-t flex flex-wrap justify-end items-center gap-4">
+                    {userData.role === 'Expert' && article.status === ArticleStatusEnum.AwaitingExpertReview && !article.expertId && article.categories?.some(cat => userData.categories?.includes(cat)) &&(
                         <button onClick={handleClaim} className="bg-brand-accent text-white px-6 py-2 rounded-md hover:bg-amber-600 transition">Claim Article</button>
                     )}
                     {canExpertEdit && (
@@ -530,6 +584,9 @@ const ArticleEditorPage: React.FC = () => {
                             <button onClick={handlePublish} className="bg-brand-primary text-white px-6 py-2 rounded-md hover:bg-indigo-700 transition">Publish</button>
                         </>
                     )}
+                     {userData.role === 'Admin' && (
+                        <button onClick={() => setDeleteModalOpen(true)} className="bg-red-600 text-white px-6 py-2 rounded-md hover:bg-red-700 transition">Delete Article</button>
+                    )}
                     <button onClick={() => navigate(-1)} className="bg-gray-500 text-white px-6 py-2 rounded-md hover:bg-gray-600 transition">Back</button>
                 </div>
             </div>
@@ -537,6 +594,13 @@ const ArticleEditorPage: React.FC = () => {
                 <p className="mb-4">Please provide clear notes for the expert on what needs to be changed.</p>
                 <textarea value={revisionNotes} onChange={e => setRevisionNotes(e.target.value)} className="w-full p-2 border rounded-md h-40" />
                 <button onClick={handleSendBack} className="w-full mt-4 bg-yellow-500 text-white py-2 rounded-md hover:bg-yellow-600">Submit Revision Notes</button>
+            </Modal>
+            <Modal isOpen={isDeleteModalOpen} onClose={() => setDeleteModalOpen(false)} title="Confirm Deletion">
+                <p className="mb-4 text-brand-text-secondary">Are you sure you want to permanently delete this article? This action cannot be undone.</p>
+                <div className="flex justify-end space-x-4">
+                    <button onClick={() => setDeleteModalOpen(false)} className="px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300">Cancel</button>
+                    <button onClick={handleDelete} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">Confirm Delete</button>
+                </div>
             </Modal>
         </div>
     );
@@ -662,7 +726,7 @@ const ExpertManagementPage: React.FC = () => {
                    return;
                 }
                 // Use a temporary app instance to create the user without signing in the current admin
-                const tempApp = firebaseApp.initializeApp(firebaseConfig, 'temp-user-creation' + Date.now());
+                const tempApp = initializeApp(firebaseConfig, 'temp-user-creation' + Date.now());
                 const tempAuth = getAuth(tempApp);
                 const userCredential = await createUserWithEmailAndPassword(tempAuth, expertData.email, password);
                 const newUid = userCredential.user!.uid;
@@ -680,7 +744,7 @@ const ExpertManagementPage: React.FC = () => {
                 await updateDoc(doc(db, 'users', newUid), newUserProfile);
 
                 await signOut(tempAuth);
-                await firebaseApp.deleteApp(tempApp);
+                await deleteApp(tempApp);
                 alert("Expert created successfully.");
             }
             handleModalClose();
@@ -831,13 +895,13 @@ const ExpertEditModal: React.FC<{ isOpen: boolean; onClose: () => void; expert: 
 const ProtectedRoute: React.FC<{ element: React.ReactElement }> = ({ element }) => {
     const { user, loading } = useAuth();
     if (loading) return <Spinner />;
-    return user ? element : <ReactRouterDom.Navigate to="/login" replace />;
+    return user ? element : <Navigate to="/login" replace />;
 };
 
 const AdminRoute: React.FC<{ element: React.ReactElement }> = ({ element }) => {
     const { userData, loading } = useAuth();
     if (loading) return <Spinner />;
-    return userData?.role === 'Admin' ? element : <ReactRouterDom.Navigate to="/" replace />;
+    return userData?.role === 'Admin' ? element : <Navigate to="/" replace />;
 };
 
 // --- Main App Component ---
@@ -861,19 +925,19 @@ const AppContent: React.FC = () => {
     }
     
     return (
-        <ReactRouterDom.HashRouter>
+        <HashRouter>
             {user && <Header />}
             <main>
-                <ReactRouterDom.Routes>
-                    <ReactRouterDom.Route path="/login" element={<LoginPage />} />
-                    <ReactRouterDom.Route path="/" element={<ProtectedRoute element={<DashboardPage />} />} />
-                    <ReactRouterDom.Route path="/article/:id" element={<ProtectedRoute element={<ArticleEditorPage />} />} />
-                    <ReactRouterDom.Route path="/profile" element={<ProtectedRoute element={<ProfilePage />} />} />
-                    <ReactRouterDom.Route path="/experts" element={<AdminRoute element={<ExpertManagementPage />} />} />
-                    <ReactRouterDom.Route path="*" element={<ReactRouterDom.Navigate to="/" replace />} />
-                </ReactRouterDom.Routes>
+                <Routes>
+                    <Route path="/login" element={<LoginPage />} />
+                    <Route path="/" element={<ProtectedRoute element={<DashboardPage />} />} />
+                    <Route path="/article/:id" element={<ProtectedRoute element={<ArticleEditorPage />} />} />
+                    <Route path="/profile" element={<ProtectedRoute element={<ProfilePage />} />} />
+                    <Route path="/experts" element={<AdminRoute element={<ExpertManagementPage />} />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
             </main>
-        </ReactRouterDom.HashRouter>
+        </HashRouter>
     );
 };
 

@@ -21,7 +21,8 @@ export interface UserProfile {
 export interface Article {
   id: string;
   title: string;
-  category: string;
+  categories: string[];
+  shortDescription?: string;
   flashContent?: string;
   deepDiveContent?: string;
   imagePrompt?: string;

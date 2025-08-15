@@ -53,13 +53,18 @@ export const generateArticleContent = functions.region("europe-west1").firestore
       return;
     }
     
-    const { title, category } = data;
+    const { title, categories, shortDescription } = data;
     console.log(`[${articleId}] Processing new draft: "${title}"`);
 
     try {
       // === STEP 1: Generate Text Content with Gemini ===
       console.log(`[${articleId}] Calling Gemini API for text content.`);
-      const textPrompt = `You are a neutral, fact-based content creator for a misinformation-fighting app called "Lumina". Your task is to generate content for the topic: "${title}" in the category "${category}".
+      
+      const categoriesText = categories.join(', ');
+      const descriptionText = shortDescription ? `The user has also provided this short description for additional context: "${shortDescription}".` : '';
+
+      const textPrompt = `You are a neutral, fact-based content creator for a misinformation-fighting app called "Lumina". Your task is to generate content for the topic: "${title}" in the categories "${categoriesText}".
+      ${descriptionText}
       
       Please provide your response in a single, minified JSON object with three specific keys:
       1. "flashContent": A concise, factual summary of 60-100 words. This is the "Lumina Flash".
