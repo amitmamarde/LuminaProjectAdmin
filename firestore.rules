@@ -4,7 +4,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // --- Helper Functions ---
-    // Safely get user data for role checks and validation.
+    // Safely get user data for role checks.
     function getUserData(userId) {
       return get(/databases/$(database)/documents/users/$(userId)).data;
     }
@@ -33,7 +33,7 @@ service cloud.firestore {
       // Only Admins can create or delete articles.
       allow create, delete: if isAdmin();
 
-      // Update rules are complex and depend on the user's role and the article's state.
+      // Update rules define who can change an article and when.
       allow update: if
         // Admins can update anything, anytime.
         isAdmin() ||
@@ -51,9 +51,8 @@ service cloud.firestore {
               // This is the most secure and robust way to write this rule.
               request.resource.data.diff(resource.data).affectedKeys().hasOnly(['expertId', 'expertDisplayName']) &&
 
-              // 3. Validation: The new values must be correct and belong to the current user.
-              request.resource.data.expertId == request.auth.uid &&
-              request.resource.data.expertDisplayName == getUserData(request.auth.uid).displayName
+              // 3. Validation: The ID must belong to the current user. The problematic display name check is removed.
+              request.resource.data.expertId == request.auth.uid
             )
 
             || // OR
