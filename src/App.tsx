@@ -509,11 +509,8 @@ const ArticleEditorPage: React.FC = () => {
     const handleClaim = async () => {
         if (!userData || !id) return;
 
-        // --- NEW: Safety Check ---
-        // Ensure the expert user has a display name set on their profile.
         if (!userData.displayName) {
             alert("Action failed: Your user profile is missing a 'Display Name'. Please go to your profile page and set one.");
-            console.error("Claim failed: User profile is missing displayName.", userData);
             return;
         }
 
@@ -522,17 +519,13 @@ const ArticleEditorPage: React.FC = () => {
             expertDisplayName: userData.displayName,
         };
 
-        // --- NEW: Debugging Log ---
-        // This will show the exact object being sent to Firestore in the browser's developer console.
-        console.log(`[DEBUG] Attempting to claim article '${id}' with data:`, JSON.stringify(newUpdates, null, 2));
-
         try {
             await updateDoc(doc(db, 'articles', id), newUpdates);
             setArticle(prev => prev ? {...prev, ...newUpdates} : null);
             alert("Article claimed successfully!");
         } catch (e) {
             console.error("Firestore update error:", e);
-            alert(`Failed to claim article. Error: ${ (e as Error).message }\n\nPlease check the developer console for more details.`);
+            alert(`Failed to claim article. Error: ${ (e as Error).message }`);
         }
     };
 
@@ -883,7 +876,6 @@ const ExpertManagementPage: React.FC = () => {
                             </tr>
                         ))}
                     </tbody>
-                </table>
                  {filteredExperts.length === 0 && (
                     <p className="text-center p-8 text-brand-text-secondary">No experts match the current filters.</p>
                 )}
