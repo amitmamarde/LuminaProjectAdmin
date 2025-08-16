@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, createContext, useContext, useMemo } from 'react';
 import {
   HashRouter,
@@ -524,8 +525,8 @@ const ArticleEditorPage: React.FC = () => {
             setArticle(prev => prev ? {...prev, ...newUpdates} : null);
             alert("Article claimed successfully!");
         } catch (e) {
-            console.error("Firestore update error:", e);
-            alert(`Failed to claim article. Error: ${ (e as Error).message }`);
+            console.error("Failed to claim article:", e);
+            alert(`An unexpected error occurred while claiming the article. Please try again. Error: ${ (e as Error).message }`);
         }
     };
 
