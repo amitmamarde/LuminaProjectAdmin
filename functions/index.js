@@ -6,13 +6,6 @@ import { GoogleGenAI, Type } from "@google/genai";
 // Initialize Firebase Admin SDK to interact with Firestore and Storage
 admin.initializeApp();
 
-// ---AI and Cloud Services Configuration ---
-// In modern Node.js runtimes for Firebase Functions (Node 10+), configuration variables
-// set via the Firebase CLI are automatically available as environment variables.
-// The key 'gemini.key' becomes the environment variable 'GEMINI_KEY'.
-// Run `firebase functions:config:set gemini.key="YOUR_API_KEY_HERE"` to set this value.
-const geminiApiKey = process.env.GEMINI_KEY;
-
 const db = admin.firestore();
 const storage = admin.storage();
 
@@ -26,6 +19,13 @@ export const generateArticleContent = functions.region("europe-west1").firestore
   .onCreate(async (snapshot, context) => {
     const articleId = context.params.articleId;
 
+    // --- AI and Cloud Services Configuration ---
+    // For 1st Gen Cloud Functions, environment configuration set via the Firebase CLI
+    // (`firebase functions:config:set`) is accessed through `functions.config()`.
+    // The command `firebase functions:config:set gemini.key="YOUR_API_KEY"` makes the key
+    // available at `functions.config().gemini.key`.
+    const geminiApiKey = functions.config().gemini?.key;
+
     // Check if the API key is available. If not, log an error and exit gracefully.
     if (!geminiApiKey) {
       console.error(`[${articleId}] Gemini API key is not configured. Run 'firebase functions:config:set gemini.key=\"YOUR_API_KEY\"' and redeploy.`);
@@ -37,7 +37,6 @@ export const generateArticleContent = functions.region("europe-west1").firestore
       return;
     }
     
-    // The API key is available from the environment variable.
     const ai = new GoogleGenAI({ apiKey: geminiApiKey });
 
     if (!snapshot) {
@@ -68,7 +67,7 @@ export const generateArticleContent = functions.region("europe-west1").firestore
       
       Please provide your response in a single, minified JSON object with three specific keys:
       1. "flashContent": A concise, factual summary of 60-100 words. This is the "Lumina Flash".
-      2. "deepDiveContent": A more detailed, neutral explanation of 500-700 words. This is the "Deep Dive".
+      2. "deepDiveContent": A detailed, neutral explanation of 500-700 words. This is the "Deep Dive". This content MUST be formatted using Markdown for readability. Use headings (e.g., ## Key Points), bold text (e.g., **important term**), and bulleted lists (e.g., * list item) where appropriate to structure the article and make it engaging. Do not use H1 headings (#). Start with a paragraph, not a heading.
       3. "imagePrompt": A vivid, descriptive text prompt (not a URL) for an AI image generator to create a symbolic, non-controversial image representing the topic. For example: "A stylized magnifying glass over a digital world map, with glowing data streams."
       
       Do not include any other text or explanations outside of the single JSON object.`;
@@ -94,7 +93,11 @@ export const generateArticleContent = functions.region("europe-west1").firestore
       const generatedText = JSON.parse(jsonString);
       console.log(`[${articleId}] Successfully generated text content.`);
 
-      // === STEP 2: Generate Image with Imagen ===
+      // === STEP 2 & 3: Image Generation & Upload (Temporarily Disabled) ===
+      // The Imagen API requires a billed GCP project. This section is disabled to prevent errors.
+      // To re-enable, set up billing, uncomment this block, and uncomment the 'imageUrl'
+      // field in the Firestore update below.
+      /*
       const imagePrompt = generatedText.imagePrompt;
       console.log(`[${articleId}] Calling Imagen API for image with prompt: "${imagePrompt}"`);
       
@@ -111,7 +114,6 @@ export const generateArticleContent = functions.region("europe-west1").firestore
       const base64ImageBytes = imageResponse.generatedImages[0].image.imageBytes;
       console.log(`[${articleId}] Successfully generated image.`);
 
-      // === STEP 3: Upload Image to Cloud Storage ===
       console.log(`[${articleId}] Uploading image to Cloud Storage...`);
       const bucket = storage.bucket(); // Uses the default bucket for the project
       const filePath = `articles/${articleId}/header.jpg`;
@@ -122,6 +124,7 @@ export const generateArticleContent = functions.region("europe-west1").firestore
       await file.makePublic(); // Make the file publicly accessible via a URL
       const imageUrl = file.publicUrl();
       console.log(`[${articleId}] Image uploaded to: ${imageUrl}`);
+      */
       
       // === STEP 4: Update Firestore Document ===
       console.log(`[${articleId}] Updating Firestore document with generated content.`);
@@ -130,11 +133,11 @@ export const generateArticleContent = functions.region("europe-west1").firestore
         flashContent: generatedText.flashContent,
         deepDiveContent: generatedText.deepDiveContent,
         imagePrompt: generatedText.imagePrompt, // Store the prompt for potential future use
-        imageUrl: imageUrl,
+        // imageUrl: imageUrl, // This field is part of the disabled image generation flow.
         status: 'AwaitingExpertReview', // This is the crucial step that sends it to the experts' dashboard
       });
 
-      console.log(`[${articleId}] Process complete! Article is now ready for expert review.`);
+      console.log(`[${articleId}] Process complete (image skipped)! Article is now ready for expert review.`);
 
     } catch (error) {
       console.error(`[${articleId}] An error occurred during content generation:`, error);

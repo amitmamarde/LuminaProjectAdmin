@@ -503,8 +503,13 @@ const ArticleEditorPage: React.FC = () => {
             expertId: userData.uid,
             expertDisplayName: userData.displayName,
         };
-        await updateDoc(doc(db, 'articles', id), newUpdates);
-        setArticle(prev => prev ? {...prev, ...newUpdates} : null);
+        try {
+            await updateDoc(doc(db, 'articles', id), newUpdates);
+            setArticle(prev => prev ? {...prev, ...newUpdates} : null);
+        } catch (e) {
+            console.error(e);
+            alert(`Failed to claim article. Error: ${ (e as Error).message }`);
+        }
     };
 
     const handleApprove = () => {
@@ -534,11 +539,33 @@ const ArticleEditorPage: React.FC = () => {
         setRevisionModalOpen(false);
     };
 
+    const renderMarkdown = (markdown: string) => {
+      // This is a simple, non-comprehensive markdown parser.
+      // It handles headings (##), bold (**), and lists (*).
+      const html = markdown
+        .replace(/^## (.*$)/gim, '<h2 class="text-2xl font-bold mt-6 mb-3 text-brand-text-primary">$1</h2>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-brand-text-primary">$1</strong>')
+        .replace(/^\* (.*$)/gim, '<li class="ml-6 list-disc mb-1">$1</li>')
+        .replace(/((<li.*<\/li>)+)/gs, '<ul>$1</ul>')
+        .split('\n\n')
+        .map(paragraph => {
+          if (paragraph.match(/<(h2|ul|li)/)) {
+            return paragraph;
+          }
+          return `<p class="text-brand-text-secondary leading-relaxed mb-4">${paragraph.replace(/\n/g, '<br/>')}</p>`;
+        })
+        .join('');
+    
+      return { __html: html };
+    };
+
     if (loading) return <Spinner />;
     if (!article || !userData) return null;
 
     const isExpertOwner = userData.role === 'Expert' && article.expertId === userData.uid;
     const canExpertEdit = isExpertOwner && (article.status === ArticleStatusEnum.AwaitingExpertReview || article.status === ArticleStatusEnum.NeedsRevision);
+    const isEditable = canExpertEdit || userData.role === 'Admin';
+
 
     return (
         <div className="container mx-auto px-6 py-8">
@@ -563,11 +590,24 @@ const ArticleEditorPage: React.FC = () => {
                 <div className="space-y-6">
                     <div>
                         <h3 className="text-2xl font-bold text-brand-text-primary mb-2">Lumina Flash (Summary)</h3>
-                        <textarea value={flashContent} onChange={e => setFlashContent(e.target.value)} readOnly={!canExpertEdit && userData.role !== 'Admin'} className="w-full p-3 border rounded-md h-32 resize-y read-only:bg-gray-100" />
+                        <textarea value={flashContent} onChange={e => setFlashContent(e.target.value)} readOnly={!isEditable} className="w-full p-3 border rounded-md h-32 resize-y read-only:bg-gray-100" />
                     </div>
                     <div>
                         <h3 className="text-2xl font-bold text-brand-text-primary mb-2">Deep Dive (Full Article)</h3>
-                        <textarea value={deepDiveContent} onChange={e => setDeepDiveContent(e.target.value)} readOnly={!canExpertEdit && userData.role !== 'Admin'} className="w-full p-3 border rounded-md h-96 resize-y read-only:bg-gray-100" />
+                        {isEditable ? (
+                             <textarea 
+                                value={deepDiveContent} 
+                                onChange={e => setDeepDiveContent(e.target.value)} 
+                                className="w-full p-3 border rounded-md h-96 resize-y font-mono"
+                                aria-label="Deep Dive Article Content (Markdown)"
+                            />
+                        ) : (
+                            <div 
+                                className="p-3 border rounded-md bg-gray-50 min-h-96" 
+                                dangerouslySetInnerHTML={renderMarkdown(deepDiveContent)}
+                                aria-label="Formatted Deep Dive Article Content"
+                            />
+                        )}
                     </div>
                 </div>
 
