@@ -1,0 +1,73 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Helper Functions ---
+
+    // Function to get the role of a user from the 'users' collection.
+    function getUserRole(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data.role;
+    }
+
+    // Function to check if the requesting user is an Admin.
+    function isAdmin() {
+      // Check if user is authenticated and their role is 'Admin'.
+      return request.auth != null && getUserRole(request.auth.uid) == 'Admin';
+    }
+
+    // Function to check if the requesting user is an Expert.
+    function isExpert() {
+      // Check if user is authenticated and their role is 'Expert'.
+      return request.auth != null && getUserRole(request.auth.uid) == 'Expert';
+    }
+
+    // --- Collection Rules ---
+
+    // Rules for the 'users' collection (user profiles).
+    match /users/{userId} {
+      // A user can read or update their own profile. Admins can manage any profile.
+      allow read, update: if request.auth.uid == userId || isAdmin();
+      // Only Admins are allowed to create new user documents (e.g., adding a new expert).
+      allow create: if isAdmin();
+      // Deleting users should be handled carefully, possibly through a backend function.
+      // For now, only admins can delete.
+      allow delete: if isAdmin();
+    }
+
+    // Rules for the 'articles' collection.
+    match /articles/{articleId} {
+      // Allow read access for any authenticated user.
+      // Also, allow anyone (including unauthenticated users) to read a 'Published' article.
+      allow read: if request.auth != null || resource.data.status == 'Published';
+
+      // Only Admins can create new articles (which start as 'Drafts').
+      allow create: if isAdmin();
+
+      // Only Admins can delete articles.
+      allow delete: if isAdmin();
+
+      // Update rules are more complex and depend on the user's role and the article's status.
+      allow update: if
+        // 1. Admins can update any article at any stage.
+        isAdmin() ||
+        // 2. Experts can update an article under specific conditions.
+        (isExpert() &&
+          (
+            // CONDITION A: Claiming an article.
+            // This rule fixes the permission error. It allows an expert to write their UID
+            // to an article that is 'AwaitingExpertReview' and is currently unclaimed.
+            (resource.data.status == 'AwaitingExpertReview' &&
+             resource.data.expertId == null &&
+             request.resource.data.expertId == request.auth.uid) ||
+
+            // CONDITION B: Editing an article they already own.
+            // The expert is the assigned expert and the article is in a state
+            // where expert input is expected.
+            (resource.data.expertId == request.auth.uid &&
+             (resource.data.status == 'AwaitingExpertReview' || resource.data.status == 'NeedsRevision'))
+          )
+        );
+    }
+  }
+}
