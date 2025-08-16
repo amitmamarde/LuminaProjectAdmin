@@ -5,7 +5,7 @@ service cloud.firestore {
 
     // --- Helper Functions ---
 
-    // Function to get the role of a user from the 'users' collection.
+    //  Function to get the role of a user from the 'users' collection.
     function getUserRole(userId) {
       return get(/databases/$(database)/documents/users/$(userId)).data.role;
     }
@@ -71,3 +71,4 @@ service cloud.firestore {
     }
   }
 }
+
