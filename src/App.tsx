@@ -441,6 +441,7 @@ const ArticleEditorPage: React.FC = () => {
     const [isRevisionModalOpen, setRevisionModalOpen] = useState(false);
     const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
     const [revisionNotes, setRevisionNotes] = useState('');
+    const [viewMode, setViewMode] = useState<'edit' | 'preview'>('preview');
 
     useEffect(() => {
         if (!id) return;
@@ -461,6 +462,14 @@ const ArticleEditorPage: React.FC = () => {
         fetchArticle();
     }, [id, navigate]);
     
+    const isExpertOwner = userData?.role === 'Expert' && article?.expertId === userData.uid;
+    const canExpertEdit = isExpertOwner && (article?.status === ArticleStatusEnum.AwaitingExpertReview || article?.status === ArticleStatusEnum.NeedsRevision);
+    const isEditable = canExpertEdit || userData?.role === 'Admin';
+    
+    useEffect(() => {
+        setViewMode(isEditable ? 'edit' : 'preview');
+    }, [isEditable]);
+
     const handleUpdate = async (updates: Partial<Article>) => {
         if (!id) return;
         try {
@@ -499,16 +508,31 @@ const ArticleEditorPage: React.FC = () => {
     
     const handleClaim = async () => {
         if (!userData || !id) return;
+
+        // --- NEW: Safety Check ---
+        // Ensure the expert user has a display name set on their profile.
+        if (!userData.displayName) {
+            alert("Action failed: Your user profile is missing a 'Display Name'. Please go to your profile page and set one.");
+            console.error("Claim failed: User profile is missing displayName.", userData);
+            return;
+        }
+
         const newUpdates = {
             expertId: userData.uid,
             expertDisplayName: userData.displayName,
         };
+
+        // --- NEW: Debugging Log ---
+        // This will show the exact object being sent to Firestore in the browser's developer console.
+        console.log(`[DEBUG] Attempting to claim article '${id}' with data:`, JSON.stringify(newUpdates, null, 2));
+
         try {
             await updateDoc(doc(db, 'articles', id), newUpdates);
             setArticle(prev => prev ? {...prev, ...newUpdates} : null);
+            alert("Article claimed successfully!");
         } catch (e) {
-            console.error(e);
-            alert(`Failed to claim article. Error: ${ (e as Error).message }`);
+            console.error("Firestore update error:", e);
+            alert(`Failed to claim article. Error: ${ (e as Error).message }\n\nPlease check the developer console for more details.`);
         }
     };
 
@@ -540,8 +564,6 @@ const ArticleEditorPage: React.FC = () => {
     };
 
     const renderMarkdown = (markdown: string) => {
-      // This is a simple, non-comprehensive markdown parser.
-      // It handles headings (##), bold (**), and lists (*).
       const html = markdown
         .replace(/^## (.*$)/gim, '<h2 class="text-2xl font-bold mt-6 mb-3 text-brand-text-primary">$1</h2>')
         .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-brand-text-primary">$1</strong>')
@@ -561,11 +583,6 @@ const ArticleEditorPage: React.FC = () => {
 
     if (loading) return <Spinner />;
     if (!article || !userData) return null;
-
-    const isExpertOwner = userData.role === 'Expert' && article.expertId === userData.uid;
-    const canExpertEdit = isExpertOwner && (article.status === ArticleStatusEnum.AwaitingExpertReview || article.status === ArticleStatusEnum.NeedsRevision);
-    const isEditable = canExpertEdit || userData.role === 'Admin';
-
 
     return (
         <div className="container mx-auto px-6 py-8">
@@ -593,8 +610,26 @@ const ArticleEditorPage: React.FC = () => {
                         <textarea value={flashContent} onChange={e => setFlashContent(e.target.value)} readOnly={!isEditable} className="w-full p-3 border rounded-md h-32 resize-y read-only:bg-gray-100" />
                     </div>
                     <div>
-                        <h3 className="text-2xl font-bold text-brand-text-primary mb-2">Deep Dive (Full Article)</h3>
-                        {isEditable ? (
+                        <div className="flex justify-between items-center mb-2">
+                            <h3 className="text-2xl font-bold text-brand-text-primary">Deep Dive (Full Article)</h3>
+                            {isEditable && (
+                                <div className="flex items-center space-x-1 border border-gray-300 rounded-lg p-1 bg-gray-100">
+                                    <button 
+                                        onClick={() => setViewMode('edit')}
+                                        className={`px-3 py-1 text-sm rounded-md transition-colors ${viewMode === 'edit' ? 'bg-white shadow-sm text-brand-primary' : 'bg-transparent text-brand-text-secondary hover:bg-gray-200'}`}
+                                    >
+                                        Edit
+                                    </button>
+                                    <button 
+                                        onClick={() => setViewMode('preview')}
+                                        className={`px-3 py-1 text-sm rounded-md transition-colors ${viewMode === 'preview' ? 'bg-white shadow-sm text-brand-primary' : 'bg-transparent text-brand-text-secondary hover:bg-gray-200'}`}
+                                    >
+                                        Preview
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                        {(viewMode === 'edit' && isEditable) ? (
                              <textarea 
                                 value={deepDiveContent} 
                                 onChange={e => setDeepDiveContent(e.target.value)} 
@@ -603,7 +638,7 @@ const ArticleEditorPage: React.FC = () => {
                             />
                         ) : (
                             <div 
-                                className="p-3 border rounded-md bg-gray-50 min-h-96" 
+                                className="p-4 border rounded-md bg-gray-50 min-h-96" 
                                 dangerouslySetInnerHTML={renderMarkdown(deepDiveContent)}
                                 aria-label="Formatted Deep Dive Article Content"
                             />
