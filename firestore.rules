@@ -12,13 +12,11 @@ service cloud.firestore {
 
     // Function to check if the requesting user is an Admin.
     function isAdmin() {
-      // Check if user is authenticated and their role is 'Admin'.
       return request.auth != null && getUserData(request.auth.uid).role == 'Admin';
     }
 
     // Function to check if the requesting user is an Expert.
     function isExpert() {
-      // Check if user is authenticated and their role is 'Expert'.
       return request.auth != null && getUserData(request.auth.uid).role == 'Expert';
     }
 
@@ -26,52 +24,44 @@ service cloud.firestore {
 
     // Rules for the 'users' collection (user profiles).
     match /users/{userId} {
-      // A user can read or update their own profile. Admins can manage any profile.
       allow read, update: if request.auth.uid == userId || isAdmin();
-      // Only Admins are allowed to create new user documents (e.g., adding a new expert).
-      allow create: if isAdmin();
-      // Only Admins can delete user profiles.
-      allow delete: if isAdmin();
+      allow create, delete: if isAdmin();
     }
 
     // Rules for the 'articles' collection.
     match /articles/{articleId} {
-      // Allow read access for any authenticated user.
-      // Also, allow anyone (including unauthenticated users) to read a 'Published' article.
       allow read: if request.auth != null || resource.data.status == 'Published';
+      allow create, delete: if isAdmin();
 
-      // Only Admins can create new articles (which start as 'Drafts').
-      allow create: if isAdmin();
-
-      // Only Admins can delete articles.
-      allow delete: if isAdmin();
-
-      // Update rules are more complex and depend on the user's role and the article's status.
+      // Update rules define who can change an article and when.
       allow update: if
         // 1. Admins can update any article at any stage.
         isAdmin() ||
+
         // 2. Experts can update an article under specific conditions.
-        (isExpert() &&
-          (
-            // CONDITION A: Claiming an article.
-            // This is the key fix for the permission error. It allows an expert to update an
-            // unclaimed article by writing their UID and their correct display name.
+        (isExpert() && (
+            // CONDITION A: Claiming an article. THIS IS THE FIX.
+            // An expert can claim an article if it's ready for review and unclaimed.
             (
               resource.data.status == 'AwaitingExpertReview' &&
               resource.data.expertId == null &&
+              // This is the crucial part: it ensures ONLY these two fields are being changed.
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['expertId', 'expertDisplayName']) &&
+              // It still validates the content of those fields for security.
               request.resource.data.expertId == request.auth.uid &&
               request.resource.data.expertDisplayName == getUserData(request.auth.uid).displayName
             ) ||
 
             // CONDITION B: Editing an article they already own.
-            // The expert is the assigned expert and the article is in a state
-            // where expert input is expected.
+            // An expert can submit their review if they are the owner and the article is in the correct state.
             (
               resource.data.expertId == request.auth.uid &&
-             (resource.data.status == 'AwaitingExpertReview' || resource.data.status == 'NeedsRevision')
+              (resource.data.status == 'AwaitingExpertReview' || resource.data.status == 'NeedsRevision') &&
+              // They can only update the content fields and change the status to 'AwaitingAdminReview'.
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['flashContent', 'deepDiveContent', 'status']) &&
+              request.resource.data.status == 'AwaitingAdminReview'
             )
-          )
-        );
+        ));
     }
   }
 }
