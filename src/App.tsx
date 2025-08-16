@@ -862,23 +862,29 @@ const ExpertManagementPage: React.FC = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {filteredExperts.map(expert => (
-                            <tr key={expert.uid} className="border-b">
-                                <td className="p-4">{expert.displayName}</td>
-                                <td className="p-4">{expert.email}</td>
-                                <td className="p-4 flex flex-wrap gap-1 max-w-sm">
-                                    {expert.categories?.map(c => <span key={c} className="bg-blue-100 text-blue-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">{c}</span>) || 'N/A'}
-                                </td>
-                                <td className="p-4"><Badge status={expert.status} /></td>
-                                <td className="p-4">
-                                    <button onClick={() => openEditModal(expert)} className="text-brand-primary hover:underline">Edit</button>
+                        {filteredExperts.length > 0 ? (
+                            filteredExperts.map(expert => (
+                                <tr key={expert.uid} className="border-b">
+                                    <td className="p-4">{expert.displayName}</td>
+                                    <td className="p-4">{expert.email}</td>
+                                    <td className="p-4 flex flex-wrap gap-1 max-w-sm">
+                                        {expert.categories?.map(c => <span key={c} className="bg-blue-100 text-blue-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">{c}</span>) || 'N/A'}
+                                    </td>
+                                    <td className="p-4"><Badge status={expert.status} /></td>
+                                    <td className="p-4">
+                                        <button onClick={() => openEditModal(expert)} className="text-brand-primary hover:underline">Edit</button>
+                                    </td>
+                                </tr>
+                            ))
+                        ) : (
+                            <tr>
+                                <td colSpan={5} className="text-center p-8 text-brand-text-secondary">
+                                    No experts match the current filters.
                                 </td>
                             </tr>
-                        ))}
+                        )}
                     </tbody>
-                 {filteredExperts.length === 0 && (
-                    <p className="text-center p-8 text-brand-text-secondary">No experts match the current filters.</p>
-                )}
+                </table>
             </div>
 
             {editingExpert && (
