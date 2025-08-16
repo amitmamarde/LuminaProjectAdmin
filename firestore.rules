@@ -5,21 +5,21 @@ service cloud.firestore {
 
     // --- Helper Functions ---
 
-    //  Function to get the role of a user from the 'users' collection.
-    function getUserRole(userId) {
-      return get(/databases/$(database)/documents/users/$(userId)).data.role;
+    // Function to get the data of a user from the 'users' collection.
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
     }
 
     // Function to check if the requesting user is an Admin.
     function isAdmin() {
       // Check if user is authenticated and their role is 'Admin'.
-      return request.auth != null && getUserRole(request.auth.uid) == 'Admin';
+      return request.auth != null && getUserData(request.auth.uid).role == 'Admin';
     }
 
     // Function to check if the requesting user is an Expert.
     function isExpert() {
       // Check if user is authenticated and their role is 'Expert'.
-      return request.auth != null && getUserRole(request.auth.uid) == 'Expert';
+      return request.auth != null && getUserData(request.auth.uid).role == 'Expert';
     }
 
     // --- Collection Rules ---
@@ -30,8 +30,7 @@ service cloud.firestore {
       allow read, update: if request.auth.uid == userId || isAdmin();
       // Only Admins are allowed to create new user documents (e.g., adding a new expert).
       allow create: if isAdmin();
-      // Deleting users should be handled carefully, possibly through a backend function.
-      // For now, only admins can delete.
+      // Only Admins can delete user profiles.
       allow delete: if isAdmin();
     }
 
@@ -55,20 +54,24 @@ service cloud.firestore {
         (isExpert() &&
           (
             // CONDITION A: Claiming an article.
-            // This rule fixes the permission error. It allows an expert to write their UID
-            // to an article that is 'AwaitingExpertReview' and is currently unclaimed.
-            (resource.data.status == 'AwaitingExpertReview' &&
-             resource.data.expertId == null &&
-             request.resource.data.expertId == request.auth.uid) ||
+            // This is the key fix for the permission error. It allows an expert to update an
+            // unclaimed article by writing their UID and their correct display name.
+            (
+              resource.data.status == 'AwaitingExpertReview' &&
+              resource.data.expertId == null &&
+              request.resource.data.expertId == request.auth.uid &&
+              request.resource.data.expertDisplayName == getUserData(request.auth.uid).displayName
+            ) ||
 
             // CONDITION B: Editing an article they already own.
             // The expert is the assigned expert and the article is in a state
             // where expert input is expected.
-            (resource.data.expertId == request.auth.uid &&
-             (resource.data.status == 'AwaitingExpertReview' || resource.data.status == 'NeedsRevision'))
+            (
+              resource.data.expertId == request.auth.uid &&
+             (resource.data.status == 'AwaitingExpertReview' || resource.data.status == 'NeedsRevision')
+            )
           )
         );
     }
   }
 }
-
