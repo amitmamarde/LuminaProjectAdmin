@@ -877,7 +877,7 @@ const ExpertManagementPage: React.FC = () => {
                                 </tr>
                             ))
                         ) : (
-                            <tr>
+                             <tr>
                                 <td colSpan={5} className="text-center p-8 text-brand-text-secondary">
                                     No experts match the current filters.
                                 </td>
