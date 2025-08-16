@@ -444,6 +444,8 @@ const ArticleEditorPage: React.FC = () => {
     const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
     const [revisionNotes, setRevisionNotes] = useState('');
     const [viewMode, setViewMode] = useState<'edit' | 'preview'>('preview');
+    const [verifiedExpert, setVerifiedExpert] = useState<UserProfile | null>(null);
+
 
     useEffect(() => {
         if (!id) return;
@@ -464,6 +466,21 @@ const ArticleEditorPage: React.FC = () => {
         fetchArticle();
     }, [id, navigate]);
     
+    useEffect(() => {
+        const fetchExpertProfile = async () => {
+            if (article?.status === ArticleStatusEnum.Published && article.expertId) {
+                const expertDocRef = doc(db, 'users', article.expertId);
+                const expertDocSnap = await getDoc(expertDocRef);
+                if (expertDocSnap.exists()) {
+                    setVerifiedExpert(expertDocSnap.data() as UserProfile);
+                }
+            } else {
+                setVerifiedExpert(null);
+            }
+        };
+        fetchExpertProfile();
+    }, [article]);
+    
     const isExpertOwner = userData?.role === 'Expert' && article?.expertId === userData.uid;
     const canExpertEdit = isExpertOwner && (article?.status === ArticleStatusEnum.AwaitingExpertReview || article?.status === ArticleStatusEnum.NeedsRevision);
     const isEditable = canExpertEdit || userData?.role === 'Admin';
@@ -472,12 +489,14 @@ const ArticleEditorPage: React.FC = () => {
         setViewMode(isEditable ? 'edit' : 'preview');
     }, [isEditable]);
 
-    const handleUpdate = async (updates: Partial<Article>) => {
+    const handleUpdate = async (updates: Partial<Article>, stayOnPage: boolean = false) => {
         if (!id) return;
         try {
             await updateDoc(doc(db, 'articles', id), updates);
             alert('Article updated successfully!');
-            navigate('/');
+            if (!stayOnPage) {
+                navigate('/');
+            }
         } catch(e) {
             console.error(e);
             alert('Failed to update article.');
@@ -531,11 +550,19 @@ const ArticleEditorPage: React.FC = () => {
         }
     };
 
+    const handleSaveDraft = () => {
+        handleUpdate({
+            flashContent,
+            deepDiveContent,
+        }, true); // `true` keeps the user on the page
+    };
+    
     const handleApprove = () => {
+        if (!userData) return;
         handleUpdate({
             status: ArticleStatusEnum.AwaitingAdminReview,
             flashContent,
-            deepDiveContent
+            deepDiveContent,
         });
     };
 
@@ -586,6 +613,11 @@ const ArticleEditorPage: React.FC = () => {
                     <div>
                         <h1 className="text-4xl font-extrabold text-brand-text-primary">{article.title}</h1>
                         <p className="text-brand-text-secondary mt-1">Categories: {article.categories?.join(', ')}</p>
+                         {verifiedExpert && verifiedExpert.showNameToPublic && (
+                            <p className="text-brand-text-secondary mt-2 italic text-sm">
+                                Verified by: {verifiedExpert.displayName}
+                            </p>
+                        )}
                     </div>
                     <Badge status={article.status} />
                 </div>
@@ -646,7 +678,10 @@ const ArticleEditorPage: React.FC = () => {
                         <button onClick={handleClaim} className="bg-brand-accent text-white px-6 py-2 rounded-md hover:bg-amber-600 transition">Claim Article</button>
                     )}
                     {canExpertEdit && (
-                         <button onClick={handleApprove} className="bg-brand-secondary text-white px-6 py-2 rounded-md hover:bg-emerald-600 transition">Save & Approve for Publication</button>
+                         <>
+                            <button onClick={handleSaveDraft} className="bg-gray-600 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition">Save Draft</button>
+                            <button onClick={handleApprove} className="bg-brand-secondary text-white px-6 py-2 rounded-md hover:bg-emerald-600 transition">Save & Approve for Publication</button>
+                         </>
                     )}
                     {userData.role === 'Admin' && article.status === ArticleStatusEnum.AwaitingAdminReview && (
                         <>
