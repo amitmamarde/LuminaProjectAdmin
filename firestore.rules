@@ -4,63 +4,71 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // --- Helper Functions ---
+    // Safely get user data for role checks and validation.
     function getUserData(userId) {
       return get(/databases/$(database)/documents/users/$(userId)).data;
     }
+    // Check if the authenticated user is an Admin.
     function isAdmin() {
       return request.auth != null && getUserData(request.auth.uid).role == 'Admin';
     }
+    // Check if the authenticated user is an Expert.
     function isExpert() {
       return request.auth != null && getUserData(request.auth.uid).role == 'Expert';
     }
 
     // --- Collection Rules ---
+    // /users/{userId}
     match /users/{userId} {
+      // Admins can manage any user. Users can manage their own profile.
       allow read, update: if request.auth.uid == userId || isAdmin();
+      // Only Admins can create or delete user profiles.
       allow create, delete: if isAdmin();
     }
 
+    // /articles/{articleId}
     match /articles/{articleId} {
+      // Any authenticated user can read articles. Published articles are public.
       allow read: if request.auth != null || resource.data.status == 'Published';
+      // Only Admins can create or delete articles.
       allow create, delete: if isAdmin();
 
-      // Update rules define who can change an article and when.
+      // Update rules are complex and depend on the user's role and the article's state.
       allow update: if
-        // 1. Admins can update any article at any stage.
+        // Admins can update anything, anytime.
         isAdmin() ||
 
-        // 2. Experts can update an article under specific conditions.
+        // Experts have specific, limited update permissions.
         (isExpert() && (
+
             // --- CONDITION A: Claiming an article. THIS IS THE FINAL FIX. ---
             (
-              // Pre-conditions: The article must be ready for review and currently unclaimed.
+              // 1. Pre-conditions: The article must be ready for review and currently unclaimed.
               resource.data.status == 'AwaitingExpertReview' &&
               resource.data.expertId == null &&
 
-              // Validation: We verify the exact fields that are being changed.
+              // 2. The Operation: The update must ONLY modify these two specific fields.
+              // This is the most secure and robust way to write this rule.
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['expertId', 'expertDisplayName']) &&
+
+              // 3. Validation: The new values must be correct and belong to the current user.
               request.resource.data.expertId == request.auth.uid &&
-              request.resource.data.expertDisplayName == getUserData(request.auth.uid).displayName &&
+              request.resource.data.expertDisplayName == getUserData(request.auth.uid).displayName
+            )
 
-              // Protection: We explicitly ensure that no other critical fields are being modified during this action.
-              request.resource.data.title == resource.data.title &&
-              request.resource.data.status == resource.data.status && // The status must NOT change during a claim.
-              request.resource.data.flashContent == resource.data.flashContent &&
-              request.resource.data.deepDiveContent == resource.data.deepDiveContent
-            ) ||
+            || // OR
 
-            // --- CONDITION B: Submitting a completed expert review. ---
+            // --- CONDITION B: Submitting a completed review. ---
             (
-              // Pre-conditions: The user must be the assigned expert and the article must be in a state awaiting their review.
+              // 1. Pre-conditions: The expert must be the owner and the article must be in a reviewable state.
               resource.data.expertId == request.auth.uid &&
               (resource.data.status == 'AwaitingExpertReview' || resource.data.status == 'NeedsRevision') &&
 
-              // Validation: The expert is allowed to change the status and the article's content.
-              request.resource.data.status == 'AwaitingAdminReview' &&
+              // 2. The Operation: The update must ONLY modify content fields and the status.
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['flashContent', 'deepDiveContent', 'status']) &&
 
-              // Protection: We explicitly ensure that the expert cannot change other critical fields, like the title or who the expert is.
-              request.resource.data.title == resource.data.title &&
-              request.resource.data.expertId == resource.data.expertId &&
-              request.resource.data.expertDisplayName == resource.data.expertDisplayName
+              // 3. Validation: The status must be correctly advanced to the next step in the workflow.
+              request.resource.data.status == 'AwaitingAdminReview'
             )
         ));
     }
