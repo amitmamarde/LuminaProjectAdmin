@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback, createContext, useContext, useMemo } from 'react';
 import {
   HashRouter,
@@ -19,7 +20,7 @@ import {
   createUserWithEmailAndPassword,
   type User,
 } from 'firebase/auth';
-import { getFirestore, collection, doc, getDoc, updateDoc, addDoc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc } from 'firebase/firestore';
+import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, addDoc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc } from 'firebase/firestore';
 import { getStorage, ref, deleteObject } from 'firebase/storage';
 
 
@@ -810,7 +811,7 @@ const ExpertManagementPage: React.FC = () => {
                 };
                 
                 // Using a plain object for setDoc
-                await updateDoc(doc(db, 'users', newUid), newUserProfile);
+                await setDoc(doc(db, 'users', newUid), newUserProfile);
 
                 await signOut(tempAuth);
                 await deleteApp(tempApp);
