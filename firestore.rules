@@ -6,24 +6,19 @@ service cloud.firestore {
     // ----------------------------
     // Helper functions
     // ----------------------------
-
-    // Safely read the current user's role.
     function userRole() {
       return request.auth != null
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
         : null;
     }
-
     function isAdmin() {
       return userRole() == 'Admin';
     }
-
     function isExpert() {
       let r = userRole();
       return r == 'Expert' || r == 'expert';
     }
-    
     function isUnclaimed(articleData) {
         return !('expertId' in articleData)
             || articleData.expertId == null
@@ -34,10 +29,7 @@ service cloud.firestore {
     // /users collection
     // ----------------------------
     match /users/{userId} {
-      // Users can read/update their own profile; Admins can read/update any.
       allow read, update: if request.auth != null && (request.auth.uid == userId || isAdmin());
-
-      // Only Admins can create or delete user docs.
       allow create, delete: if isAdmin();
     }
 
@@ -45,52 +37,47 @@ service cloud.firestore {
     // /articles collection
     // ----------------------------
     match /articles/{articleId} {
-
-      // Anyone signed-in can read; public can read Published.
       allow read: if request.auth != null || resource.data.status == 'Published';
-
-      // Only Admins can create or delete article docs.
       allow create, delete: if isAdmin();
 
-      // Updates are allowed to Admins, or Experts according to the two flows below.
       allow update: if
-        // Admins can update anything.
         isAdmin() ||
-
-        // Expert-specific update permissions.
         (isExpert() && (
 
-          // ---------- CONDITION A: Claiming an article ----------
+          // --- CONDITION A: Claiming an article ---
           (
-            // 1) Article must be awaiting expert review and currently unclaimed.
             resource.data.status == 'AwaitingExpertReview' &&
             isUnclaimed(resource.data) &&
-
-            // 2) The expert must assign their own UID.
             request.resource.data.expertId == request.auth.uid &&
-
-            // 3) Status must NOT change during the claim.
             request.resource.data.status == resource.data.status &&
-
-            // 4) *** FINAL FIX ***: Only expertId AND expertDisplayName may change.
             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['expertId', 'expertDisplayName'])
           )
 
           ||
 
-          // ---------- CONDITION B: Submitting a completed review ----------
+          // --- CONDITION B: Submitting a completed review ---
+          (
+            resource.data.expertId == request.auth.uid &&
+            (resource.data.status == 'AwaitingExpertReview' || resource.data.status == 'NeedsRevision') &&
+            request.resource.data.status == 'AwaitingAdminReview' &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'flashContent', 'deepDiveContent'])
+          )
+          
+          ||
+
+          // --- CONDITION C: Saving a draft (in-progress work). THIS IS THE FIX. ---
           (
             // 1) The user must be the assigned expert.
             resource.data.expertId == request.auth.uid &&
-
-            // 2) Current status must be AwaitingExpertReview or NeedsRevision.
-            (resource.data.status == 'AwaitingExpertReview' || resource.data.status == 'NeedsRevision') &&
-
-            // 3) Status must advance correctly.
-            request.resource.data.status == 'AwaitingAdminReview' &&
             
-            // 4) Proactive Fix: Restrict which fields may change during submission to match the app's logic.
-            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'flashContent', 'deepDiveContent'])
+            // 2) The article must be in a state where the expert can edit.
+            (resource.data.status == 'AwaitingExpertReview' || resource.data.status == 'NeedsRevision') &&
+            
+            // 3) The status must NOT change during a draft save.
+            request.resource.data.status == resource.data.status &&
+            
+            // 4) The update must ONLY affect the content fields.
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['flashContent', 'deepDiveContent'])
           )
         ));
     }
