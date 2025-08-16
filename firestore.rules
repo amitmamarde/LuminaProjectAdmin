@@ -29,7 +29,14 @@ service cloud.firestore {
     // /users collection
     // ----------------------------
     match /users/{userId} {
-      allow read, update: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      // *** FINAL FIX ***: Separate read and write permissions.
+      // Any authenticated user needs to be able to read profile data to see an expert's name.
+      allow read: if request.auth != null;
+
+      // Only the user themselves or an Admin can update a profile.
+      allow update: if request.auth != null && (request.auth.uid == userId || isAdmin());
+
+      // Only Admins can create or delete user docs.
       allow create, delete: if isAdmin();
     }
 
@@ -43,7 +50,6 @@ service cloud.firestore {
       allow update: if
         isAdmin() ||
         (isExpert() && (
-
           // --- CONDITION A: Claiming an article ---
           (
             resource.data.status == 'AwaitingExpertReview' &&
@@ -52,9 +58,7 @@ service cloud.firestore {
             request.resource.data.status == resource.data.status &&
             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['expertId', 'expertDisplayName'])
           )
-
           ||
-
           // --- CONDITION B: Submitting a completed review ---
           (
             resource.data.expertId == request.auth.uid &&
@@ -62,21 +66,12 @@ service cloud.firestore {
             request.resource.data.status == 'AwaitingAdminReview' &&
             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'flashContent', 'deepDiveContent'])
           )
-          
           ||
-
-          // --- CONDITION C: Saving a draft (in-progress work). THIS IS THE FIX. ---
+          // --- CONDITION C: Saving a draft ---
           (
-            // 1) The user must be the assigned expert.
             resource.data.expertId == request.auth.uid &&
-            
-            // 2) The article must be in a state where the expert can edit.
             (resource.data.status == 'AwaitingExpertReview' || resource.data.status == 'NeedsRevision') &&
-            
-            // 3) The status must NOT change during a draft save.
             request.resource.data.status == resource.data.status &&
-            
-            // 4) The update must ONLY affect the content fields.
             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['flashContent', 'deepDiveContent'])
           )
         ));
