@@ -1,5 +1,5 @@
 {
-  "name": "Lumina Admin Portal",
-  "description": "A web portal for experts and admins to review, edit, and publish fact-checked content for the Lumina misinformation-fighting application.",
+  "name": "Lumina Content Platform",
+  "description": "A web portal for admins and experts to validate trending topics, curate positive news, and publish high-quality content using the power of AI and human review.",
   "requestFramePermissions": []
 }

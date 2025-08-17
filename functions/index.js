@@ -1,29 +1,26 @@
-// Switched to CommonJS syntax for better compatibility with 1st Gen function deployments.
-const functions = require("firebase-functions");
-const admin = require("firebase-admin");
-const { GoogleGenAI, Type } = require("@google/genai");
+// This file uses modern ES Module syntax (`import`/`export`) and the modern secrets management required for a successful deployment.
+import * as functions from "firebase-functions";
+import admin from "firebase-admin";
+import { GoogleGenAI, Type } from "@google/genai";
 
-// Initialize Firebase Admin SDK to interact with Firestore and Storage
+// Initialize Firebase Admin SDK to interact with Firestore
 admin.initializeApp();
-
 const db = admin.firestore();
-const storage = admin.storage();
 
 /**
  * This Cloud Function automatically triggers when a new document is created in the 'articles' collection.
- * Its purpose is to take a simple 'Draft' article (with a title, category, and type) and use AI
- * to generate a full article with a summary, a deep dive, and a header image.
+ * It generates the main content for the article using the Gemini API.
  */
-exports.generateArticleContent = functions.region("europe-west1").firestore
+export const generateArticleContent = functions.region("europe-west1")
+  .runWith({ secrets: ["GEMINI_API_KEY"] })
+  .firestore
   .document("articles/{articleId}")
   .onCreate(async (snapshot, context) => {
     const articleId = context.params.articleId;
-
-    // --- AI and Cloud Services Configuration ---
-    const geminiApiKey = functions.config().gemini?.key;
+    const geminiApiKey = process.env.GEMINI_API_KEY;
 
     if (!geminiApiKey) {
-      console.error(`[${articleId}] Gemini API key is not configured. Run 'firebase functions:config:set gemini.key=\"YOUR_API_KEY\"' and redeploy.`);
+      console.error(`[${articleId}] Gemini API key is not configured in secrets. Please run 'firebase functions:secrets:set GEMINI_API_KEY' and redeploy.`);
       const articleRef = db.collection('articles').doc(articleId);
       await articleRef.update({
         status: 'NeedsRevision',
@@ -33,16 +30,10 @@ exports.generateArticleContent = functions.region("europe-west1").firestore
     }
     
     const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-
-    if (!snapshot) {
-      console.log("No data associated with the event, exiting.");
-      return;
-    }
-
     const data = snapshot.data();
     
-    if (data.status !== 'Draft') {
-      console.log(`[${articleId}] Ignoring article with status '${data.status}'.`);
+    if (!data || data.status !== 'Draft') {
+      console.log(`[${articleId}] Ignoring article with status '${data?.status}'.`);
       return;
     }
     
@@ -50,7 +41,6 @@ exports.generateArticleContent = functions.region("europe-west1").firestore
     console.log(`[${articleId}] Processing new draft: "${title}" of type "${articleType}"`);
 
     try {
-      // === STEP 1: Generate Text Content with Gemini (with dynamic prompts) ===
       console.log(`[${articleId}] Calling Gemini API for text content.`);
       
       const categoriesText = categories.join(', ');
@@ -93,16 +83,8 @@ exports.generateArticleContent = functions.region("europe-west1").firestore
       const jsonString = textResponse.text.trim();
       const generatedText = JSON.parse(jsonString);
       console.log(`[${articleId}] Successfully generated text content.`);
-
-      // === STEP 2 & 3: Image Generation & Upload (Temporarily Disabled) ===
-      /* ... (image generation code remains unchanged and disabled) ... */
       
-      // === STEP 4: Update Firestore Document ===
-      console.log(`[${articleId}] Updating Firestore document with generated content.`);
       const articleRef = db.collection('articles').doc(articleId);
-
-      // ** DUAL-TRACK WORKFLOW LOGIC **
-      // Positive news goes straight to admin for a final look, while trending topics need expert validation.
       const nextStatus = articleType === 'Positive News' ? 'AwaitingAdminReview' : 'AwaitingExpertReview';
       
       await articleRef.update({
@@ -112,7 +94,7 @@ exports.generateArticleContent = functions.region("europe-west1").firestore
         status: nextStatus,
       });
 
-      console.log(`[${articleId}] Process complete (image skipped)! Article is now in status '${nextStatus}'.`);
+      console.log(`[${articleId}] Process complete! Article is now in status '${nextStatus}'.`);
 
     } catch (error) {
       console.error(`[${articleId}] An error occurred during content generation:`, error);
@@ -127,15 +109,16 @@ exports.generateArticleContent = functions.region("europe-west1").firestore
 
 /**
  * This scheduled Cloud Function runs every 6 hours to automatically discover trending topics
- * and positive news stories using a search-grounded AI model. It populates a 'suggested_topics'
- * collection for admins to review and approve.
+ * and positive news stories using a search-grounded AI model.
  */
-exports.discoverTopics = functions.region("europe-west1").pubsub.schedule("every 6 hours").onRun(async (context) => {
+export const discoverTopics = functions.region("europe-west1")
+  .runWith({ secrets: ["GEMINI_API_KEY"] })
+  .pubsub.schedule("every 6 hours").onRun(async (context) => {
     console.log("Running scheduled topic discovery...");
-    const geminiApiKey = functions.config().gemini?.key;
+    const geminiApiKey = process.env.GEMINI_API_KEY;
 
     if (!geminiApiKey) {
-        console.error("Cannot discover topics: Gemini API key is not configured.");
+        console.error("Cannot discover topics: Gemini API key is not configured in secrets.");
         return;
     }
 
@@ -198,10 +181,18 @@ exports.discoverTopics = functions.region("europe-west1").pubsub.schedule("every
 
             if (result.suggestions && result.suggestions.length > 0) {
                 const batch = db.batch();
+                let newSuggestionCount = 0;
+
                 for (const suggestion of result.suggestions) {
-                    // Prevent duplicates by checking for existing titles
-                    const existingQuery = await db.collection('suggested_topics').where('title', '==', suggestion.title).limit(1).get();
-                    if (existingQuery.empty) {
+                    const existingQuery = db.collection('suggested_topics')
+                        .where('title', '==', suggestion.title)
+                        .where('region', '==', config.region)
+                        .where('articleType', '==', config.articleType)
+                        .limit(1);
+
+                    const existingSnapshot = await existingQuery.get();
+                    
+                    if (existingSnapshot.empty) {
                         const newSuggestionRef = db.collection('suggested_topics').doc();
                         batch.set(newSuggestionRef, {
                             ...suggestion,
@@ -209,10 +200,15 @@ exports.discoverTopics = functions.region("europe-west1").pubsub.schedule("every
                             region: config.region,
                             createdAt: admin.firestore.FieldValue.serverTimestamp()
                         });
+                        newSuggestionCount++;
                     }
                 }
-                await batch.commit();
-                console.log(`Added ${result.suggestions.length} new suggestions for ${config.articleType} in ${config.region}.`);
+                if (newSuggestionCount > 0) {
+                    await batch.commit();
+                    console.log(`Added ${newSuggestionCount} new suggestions for ${config.articleType} in ${config.region}.`);
+                } else {
+                    console.log(`No new, unique suggestions found for ${config.articleType} in ${config.region}.`);
+                }
             }
         } catch (error) {
             console.error(`Failed to discover topics for ${config.articleType} in ${config.region}:`, error);
