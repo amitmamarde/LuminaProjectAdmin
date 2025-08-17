@@ -29,13 +29,10 @@ service cloud.firestore {
     // /users collection
     // ----------------------------
     match /users/{userId} {
-      // *** FINAL FIX ***: Separate read and write permissions.
-      // Any authenticated user needs to be able to read profile data to see an expert's name.
+      // Any authenticated user can read profile data (e.g., to see an expert's name).
       allow read: if request.auth != null;
-
       // Only the user themselves or an Admin can update a profile.
       allow update: if request.auth != null && (request.auth.uid == userId || isAdmin());
-
       // Only Admins can create or delete user docs.
       allow create, delete: if isAdmin();
     }
@@ -44,7 +41,9 @@ service cloud.firestore {
     // /articles collection
     // ----------------------------
     match /articles/{articleId} {
+      // Anyone can read a published article. Authenticated users can read others.
       allow read: if request.auth != null || resource.data.status == 'Published';
+      // Only Admins can create or delete articles.
       allow create, delete: if isAdmin();
 
       allow update: if
@@ -75,6 +74,14 @@ service cloud.firestore {
             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['flashContent', 'deepDiveContent'])
           )
         ));
+    }
+
+    // ----------------------------
+    // /suggested_topics collection  <- THIS IS THE FIX
+    // ----------------------------
+    match /suggested_topics/{suggestionId} {
+        // Only Admins can read the topic suggestions and delete them (approve/reject).
+        allow read, delete: if isAdmin();
     }
   }
 }
