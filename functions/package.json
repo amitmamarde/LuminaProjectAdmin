@@ -2,7 +2,6 @@
   "name": "lumina-functions",
   "description": "Cloud Functions for the Lumina Misinformation App",
   "main": "index.js",
-  "type": "module",
   "dependencies": {
     "@google/genai": "0.15.0",
     "firebase-admin": "^12.2.0",

@@ -1,7 +1,7 @@
-// Using ES Module syntax, converted to 1st Gen Functions to bypass Eventarc permission issues.
-import functions from "firebase-functions";
-import admin from "firebase-admin";
-import { GoogleGenAI, Type } from "@google/genai";
+// Switched to CommonJS syntax for better compatibility with 1st Gen function deployments.
+const functions = require("firebase-functions");
+const admin = require("firebase-admin");
+const { GoogleGenAI, Type } = require("@google/genai");
 
 // Initialize Firebase Admin SDK to interact with Firestore and Storage
 admin.initializeApp();
@@ -14,7 +14,7 @@ const storage = admin.storage();
  * Its purpose is to take a simple 'Draft' article (with a title, category, and type) and use AI
  * to generate a full article with a summary, a deep dive, and a header image.
  */
-export const generateArticleContent = functions.region("europe-west1").firestore
+exports.generateArticleContent = functions.region("europe-west1").firestore
   .document("articles/{articleId}")
   .onCreate(async (snapshot, context) => {
     const articleId = context.params.articleId;
@@ -130,7 +130,7 @@ export const generateArticleContent = functions.region("europe-west1").firestore
  * and positive news stories using a search-grounded AI model. It populates a 'suggested_topics'
  * collection for admins to review and approve.
  */
-export const discoverTopics = functions.region("europe-west1").pubsub.schedule("every 6 hours").onRun(async (context) => {
+exports.discoverTopics = functions.region("europe-west1").pubsub.schedule("every 6 hours").onRun(async (context) => {
     console.log("Running scheduled topic discovery...");
     const geminiApiKey = functions.config().gemini?.key;
 
