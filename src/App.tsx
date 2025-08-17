@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useCallback, createContext, useContext, useMemo } from 'react';
 import {
   HashRouter,
@@ -24,12 +22,11 @@ import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, addDoc, serve
 import { getStorage, ref, deleteObject } from 'firebase/storage';
 
 
-import type { UserProfile, Article, ArticleStatus } from './types';
+import type { UserProfile, Article, ArticleStatus, ArticleType, SuggestedTopic } from './types';
 import { ArticleStatus as ArticleStatusEnum } from './types';
 
 
 // --- Firebase Configuration ---
-// Securely load configuration from environment variables
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -92,7 +89,6 @@ const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
             setUserData(fetchedUserData);
           }
         } else {
-          // User exists in Auth but not Firestore, log them out.
           setUserData(null);
           await signOut(auth);
         }
@@ -168,12 +164,15 @@ const Header: React.FC = () => {
     <header className="bg-brand-surface shadow-md sticky top-0 z-40">
       <div className="container mx-auto px-6 py-4 flex justify-between items-center">
         <Link to="/" className="text-2xl font-bold text-brand-primary">
-          Lumina Portal
+          Lumina Platform
         </Link>
         {userData && (
-          <nav className="flex items-center space-x-4">
+          <nav className="flex items-center space-x-6">
              {userData.role === 'Admin' && (
-              <Link to="/experts" className="text-brand-text-secondary hover:text-brand-primary font-medium">Manage Experts</Link>
+              <>
+                <Link to="/discovery" className="text-brand-text-secondary hover:text-brand-primary font-medium">Topic Discovery</Link>
+                <Link to="/experts" className="text-brand-text-secondary hover:text-brand-primary font-medium">Manage Experts</Link>
+              </>
             )}
             <span className="text-brand-text-secondary">
               Welcome, <Link to="/profile" className="font-semibold text-brand-primary hover:underline">{userData.displayName}</Link> ({userData.role})
@@ -232,8 +231,8 @@ const LoginPage: React.FC = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-brand-background">
       <div className="max-w-md w-full bg-brand-surface p-8 rounded-xl shadow-lg">
-        <h1 className="text-3xl font-bold text-center text-brand-primary mb-2">Lumina Portal Login</h1>
-        <p className="text-center text-brand-text-secondary mb-8">Access for Experts & Admins</p>
+        <h1 className="text-3xl font-bold text-center text-brand-primary mb-2">Lumina Content Platform</h1>
+        <p className="text-center text-brand-text-secondary mb-8">Content Curation & Validation Platform</p>
         <form onSubmit={handleLogin}>
           {error && <p className="bg-red-100 text-red-700 p-3 rounded-md mb-4">{error}</p>}
           <div className="mb-4">
@@ -272,8 +271,10 @@ const DashboardPage: React.FC = () => {
     const [newTitle, setNewTitle] = useState('');
     const [newShortDescription, setNewShortDescription] = useState('');
     const [newCategories, setNewCategories] = useState<string[]>([]);
+    const [newArticleType, setNewArticleType] = useState<ArticleType>('Trending Topic');
     const [statusFilter, setStatusFilter] = useState('all');
     const [categoryFilter, setCategoryFilter] = useState('all');
+    const [articleTypeFilter, setArticleTypeFilter] = useState('all');
 
     const fetchArticles = useCallback(async () => {
         if (!userData) return;
@@ -282,7 +283,7 @@ const DashboardPage: React.FC = () => {
 
         if (userData.role === 'Admin') {
             articlesQuery = query(collection(db, 'articles'));
-        } else { // Expert
+        } else {
             articlesQuery = query(collection(db, 'articles'), where('status', '!=', 'Draft'), orderBy('status'), orderBy('createdAt', 'desc'));
         }
         
@@ -302,9 +303,11 @@ const DashboardPage: React.FC = () => {
         if (statusFilter !== 'all') {
             processedArticles = processedArticles.filter(art => art.status === statusFilter);
         }
-
         if (categoryFilter !== 'all') {
             processedArticles = processedArticles.filter(art => art.categories?.includes(categoryFilter));
+        }
+        if (articleTypeFilter !== 'all') {
+            processedArticles = processedArticles.filter(art => art.articleType === articleTypeFilter);
         }
 
         if (userData?.role === 'Expert') {
@@ -317,16 +320,17 @@ const DashboardPage: React.FC = () => {
         }
         
         return processedArticles;
-    }, [articles, statusFilter, categoryFilter, userData]);
+    }, [articles, statusFilter, categoryFilter, articleTypeFilter, userData]);
 
     const handleCreateDraft = async () => {
-        if (!newTitle || newCategories.length === 0) {
-            alert("Title and at least one category are required.");
+        if (!newTitle || newCategories.length === 0 || !newArticleType) {
+            alert("Title, Article Type, and at least one category are required.");
             return;
         }
         try {
             await addDoc(collection(db, 'articles'), {
                 title: newTitle,
+                articleType: newArticleType,
                 shortDescription: newShortDescription,
                 categories: newCategories,
                 status: ArticleStatusEnum.Draft,
@@ -335,9 +339,10 @@ const DashboardPage: React.FC = () => {
             setNewTitle('');
             setNewShortDescription('');
             setNewCategories([]);
+            setNewArticleType('Trending Topic');
             setCreateModalOpen(false);
             alert('Draft created! The AI will now generate content.');
-            fetchArticles(); // Refresh the list to show the new draft
+            fetchArticles();
         } catch (error) {
             console.error("Error creating draft:", error);
             alert('Failed to create draft.');
@@ -362,7 +367,7 @@ const DashboardPage: React.FC = () => {
     return (
         <div className="container mx-auto px-6 py-8">
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-brand-text-primary">Article Management</h1>
+                <h1 className="text-3xl font-bold text-brand-text-primary">Content Dashboard</h1>
                 {userData?.role === 'Admin' && (
                     <button onClick={() => setCreateModalOpen(true)} className="px-4 py-2 bg-brand-primary text-white rounded-md hover:bg-indigo-700 transition">
                         + Create New Draft
@@ -382,6 +387,11 @@ const DashboardPage: React.FC = () => {
                     <option value="all">All Categories</option>
                     {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
+                 <select value={articleTypeFilter} onChange={e => setArticleTypeFilter(e.target.value)} className="w-full md:w-auto px-4 py-2 border rounded-md">
+                    <option value="all">All Types</option>
+                    <option value="Trending Topic">Trending Topic</option>
+                    <option value="Positive News">Positive News</option>
+                </select>
             </div>
 
             {filteredArticles.length === 0 ? (
@@ -390,28 +400,51 @@ const DashboardPage: React.FC = () => {
                 </p>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredArticles.map(article => (
-                        <Link to={`/article/${article.id}`} key={article.id} className="block bg-brand-surface rounded-lg shadow hover:shadow-xl transition-shadow duration-300 p-6">
-                            <div className="flex justify-between items-start mb-2">
-                                <h2 className="text-xl font-bold text-brand-text-primary pr-2">{article.title}</h2>
-                                <Badge status={article.status} />
-                            </div>
-                            <p className="text-brand-text-secondary text-sm mb-4">Categories: {article.categories?.join(', ')}</p>
-                            <div className="text-sm font-semibold mt-auto pt-2">
-                                {article.status === ArticleStatusEnum.Draft && <p className="text-gray-600">AI content generation in progress...</p>}
-                                {article.status === ArticleStatusEnum.NeedsRevision && <p className="text-red-600">Revision needed.</p>}
-                                {article.status === ArticleStatusEnum.AwaitingExpertReview && !article.expertId && <p className="text-yellow-600">Ready for expert review.</p>}
-                                {article.status === ArticleStatusEnum.AwaitingExpertReview && article.expertId && <p className="text-yellow-800">In review with {article.expertDisplayName}.</p>}
-                                {article.status === ArticleStatusEnum.AwaitingAdminReview && <p className="text-blue-600">Ready for admin review.</p>}
-                                {article.status === ArticleStatusEnum.Published && <p className="text-green-600">Published on {article.publishedAt?.toDate().toLocaleDateString()}</p>}
-                            </div>
-                        </Link>
-                    ))}
+                    {filteredArticles.map(article => {
+                        const isPositiveNews = article.articleType === 'Positive News';
+                        const typeTagColor = isPositiveNews ? 'bg-pink-200 text-pink-800' : 'bg-purple-200 text-purple-800';
+
+                        return (
+                            <Link to={`/article/${article.id}`} key={article.id} className="block bg-brand-surface rounded-lg shadow hover:shadow-xl transition-shadow duration-300 p-6 flex flex-col">
+                                <div className="flex-grow">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <h2 className="text-xl font-bold text-brand-text-primary pr-2">{article.title}</h2>
+                                        <Badge status={article.status} />
+                                    </div>
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${typeTagColor}`}>
+                                            {article.articleType}
+                                        </span>
+                                    </div>
+                                    <p className="text-brand-text-secondary text-sm mb-4">Categories: {article.categories?.join(', ')}</p>
+                                </div>
+                                <div className="text-sm font-semibold mt-auto pt-2">
+                                    {article.status === ArticleStatusEnum.Draft && <p className="text-gray-600">AI content generation in progress...</p>}
+                                    {article.status === ArticleStatusEnum.NeedsRevision && <p className="text-red-600">Revision needed.</p>}
+                                    {article.status === ArticleStatusEnum.AwaitingExpertReview && !article.expertId && <p className="text-yellow-600">Ready for expert review.</p>}
+                                    {article.status === ArticleStatusEnum.AwaitingExpertReview && article.expertId && <p className="text-yellow-800">In review with {article.expertDisplayName}.</p>}
+                                    {article.status === ArticleStatusEnum.AwaitingAdminReview && <p className="text-blue-600">Ready for admin review.</p>}
+                                    {article.status === ArticleStatusEnum.Published && <p className="text-green-600">Published on {article.publishedAt?.toDate().toLocaleDateString()}</p>}
+                                </div>
+                            </Link>
+                        );
+                    })}
                 </div>
             )}
             
             <Modal isOpen={isCreateModalOpen} onClose={() => setCreateModalOpen(false)} title="Create New Draft">
                 <div className="space-y-4">
+                    <div>
+                        <label className="font-semibold mb-2 block">Article Type <span className="text-red-500">*</span></label>
+                        <div className="flex gap-4">
+                            {(['Trending Topic', 'Positive News'] as ArticleType[]).map(type => (
+                                <label key={type} className={`flex-1 p-4 border rounded-lg cursor-pointer text-center ${newArticleType === type ? 'border-brand-primary bg-indigo-50 ring-2 ring-brand-primary' : 'border-gray-300'}`}>
+                                    <input type="radio" name="articleType" value={type} checked={newArticleType === type} onChange={() => setNewArticleType(type)} className="sr-only" />
+                                    <span className="font-semibold">{type}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
                     <input type="text" placeholder="Article Title" value={newTitle} onChange={e => setNewTitle(e.target.value)} className="w-full px-4 py-2 border rounded-md" />
                     <textarea placeholder="Short Description (Optional) - provide context for the AI" value={newShortDescription} onChange={e => setNewShortDescription(e.target.value)} className="w-full px-4 py-2 border rounded-md h-24 resize-y" />
                     <div>
@@ -496,6 +529,8 @@ const ArticleEditorPage: React.FC = () => {
             alert('Article updated successfully!');
             if (!stayOnPage) {
                 navigate('/');
+            } else {
+                 setArticle(prev => prev ? {...prev, ...updates} : null);
             }
         } catch(e) {
             console.error(e);
@@ -544,9 +579,9 @@ const ArticleEditorPage: React.FC = () => {
             await updateDoc(doc(db, 'articles', id), newUpdates);
             setArticle(prev => prev ? {...prev, ...newUpdates} : null);
             alert("Article claimed successfully!");
-        } catch (e) {
-            console.error("Failed to claim article:", e);
-            alert(`An unexpected error occurred while claiming the article. Please try again. Error: ${ (e as Error).message }`);
+        } catch (e: any) {
+             console.error("Firestore update error:", e);
+            alert(`Failed to claim article. Error: ${e.message}`);
         }
     };
 
@@ -554,7 +589,7 @@ const ArticleEditorPage: React.FC = () => {
         handleUpdate({
             flashContent,
             deepDiveContent,
-        }, true); // `true` keeps the user on the page
+        }, true);
     };
     
     const handleApprove = () => {
@@ -605,17 +640,30 @@ const ArticleEditorPage: React.FC = () => {
 
     if (loading) return <Spinner />;
     if (!article || !userData) return null;
+    
+    const isPositiveNews = article.articleType === 'Positive News';
+    const typeTagColor = isPositiveNews ? 'bg-pink-200 text-pink-800' : 'bg-purple-200 text-purple-800';
 
     return (
         <div className="container mx-auto px-6 py-8">
             <div className="bg-brand-surface p-8 rounded-lg shadow-lg">
                 <div className="flex justify-between items-start mb-4">
                     <div>
+                        <div className="flex items-center gap-3 mb-1">
+                             <span className={`px-3 py-1 text-sm font-semibold rounded-full ${typeTagColor}`}>
+                                {article.articleType}
+                            </span>
+                        </div>
                         <h1 className="text-4xl font-extrabold text-brand-text-primary">{article.title}</h1>
                         <p className="text-brand-text-secondary mt-1">Categories: {article.categories?.join(', ')}</p>
                          {verifiedExpert && verifiedExpert.showNameToPublic && (
                             <p className="text-brand-text-secondary mt-2 italic text-sm">
                                 Verified by: {verifiedExpert.displayName}
+                            </p>
+                        )}
+                        {article.sourceUrl && (
+                             <p className="text-brand-text-secondary mt-2 text-sm">
+                                Source: <a href={article.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-brand-primary hover:underline">{article.sourceTitle || article.sourceUrl}</a>
                             </p>
                         )}
                     </div>
@@ -680,7 +728,7 @@ const ArticleEditorPage: React.FC = () => {
                     {canExpertEdit && (
                          <>
                             <button onClick={handleSaveDraft} className="bg-gray-600 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition">Save Draft</button>
-                            <button onClick={handleApprove} className="bg-brand-secondary text-white px-6 py-2 rounded-md hover:bg-emerald-600 transition">Save & Approve for Publication</button>
+                            <button onClick={handleApprove} className="bg-brand-secondary text-white px-6 py-2 rounded-md hover:bg-emerald-600 transition">Save & Approve</button>
                          </>
                     )}
                     {userData.role === 'Admin' && article.status === ArticleStatusEnum.AwaitingAdminReview && (
@@ -776,6 +824,100 @@ const ProfilePage: React.FC = () => {
     );
 };
 
+const TopicDiscoveryPage: React.FC = () => {
+    const [suggestions, setSuggestions] = useState<SuggestedTopic[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    const fetchSuggestions = useCallback(async () => {
+        setLoading(true);
+        const q = query(collection(db, 'suggested_topics'), orderBy('createdAt', 'desc'));
+        const querySnapshot = await getDocs(q);
+        const fetchedSuggestions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SuggestedTopic));
+        setSuggestions(fetchedSuggestions);
+        setLoading(false);
+    }, []);
+
+    useEffect(() => {
+        fetchSuggestions();
+    }, [fetchSuggestions]);
+
+    const handleApprove = async (suggestion: SuggestedTopic) => {
+        try {
+            // 1. Create a new article from the suggestion
+            await addDoc(collection(db, 'articles'), {
+                title: suggestion.title,
+                articleType: suggestion.articleType,
+                shortDescription: suggestion.shortDescription,
+                categories: suggestion.categories,
+                status: ArticleStatusEnum.Draft,
+                createdAt: serverTimestamp(),
+                sourceUrl: suggestion.sourceUrl || null,
+                sourceTitle: suggestion.sourceTitle || null,
+            });
+
+            // 2. Delete the suggestion
+            await deleteDoc(doc(db, 'suggested_topics', suggestion.id));
+
+            alert(`'${suggestion.title}' approved. The AI will now generate the full article.`);
+            fetchSuggestions(); // Refresh the list
+        } catch (error) {
+            console.error("Error approving suggestion:", error);
+            alert("Failed to approve suggestion.");
+        }
+    };
+
+    const handleReject = async (suggestionId: string) => {
+        try {
+            await deleteDoc(doc(db, 'suggested_topics', suggestionId));
+            alert("Suggestion rejected and removed.");
+            fetchSuggestions(); // Refresh the list
+        } catch (error) {
+            console.error("Error rejecting suggestion:", error);
+            alert("Failed to reject suggestion.");
+        }
+    };
+
+    if (loading) return <Spinner />;
+
+    return (
+        <div className="container mx-auto px-6 py-8">
+            <h1 className="text-3xl font-bold text-brand-text-primary mb-6">Topic Discovery</h1>
+            <p className="text-brand-text-secondary mb-8">Review AI-generated topic suggestions. Approving a topic will create a new draft and trigger the AI to write the full article.</p>
+            
+            {suggestions.length === 0 ? (
+                <p className="text-center text-brand-text-secondary mt-12 text-lg">No new topic suggestions at the moment. The AI engine runs every few hours.</p>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {suggestions.map(suggestion => {
+                        const isPositiveNews = suggestion.articleType === 'Positive News';
+                        const typeTagColor = isPositiveNews ? 'bg-pink-200 text-pink-800' : 'bg-purple-200 text-purple-800';
+                        const regionTagColor = 'bg-gray-200 text-gray-800';
+                        
+                        return (
+                            <div key={suggestion.id} className="bg-brand-surface rounded-lg shadow p-6 flex flex-col justify-between">
+                                <div>
+                                    <div className="flex flex-wrap items-center gap-2 mb-3">
+                                        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${typeTagColor}`}>{suggestion.articleType}</span>
+                                        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${regionTagColor}`}>{suggestion.region}</span>
+                                    </div>
+                                    <h2 className="text-xl font-bold text-brand-text-primary mb-2">{suggestion.title}</h2>
+                                    <p className="text-sm text-brand-text-secondary mb-3">{suggestion.shortDescription}</p>
+                                    <p className="text-xs text-brand-text-secondary mb-4">Categories: {suggestion.categories.join(', ')}</p>
+                                </div>
+                                <div className="mt-4 pt-4 border-t flex justify-end space-x-3">
+                                    <button onClick={() => handleReject(suggestion.id)} className="px-4 py-2 text-sm font-medium bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition">Reject</button>
+                                    <button onClick={() => handleApprove(suggestion)} className="px-4 py-2 text-sm font-medium bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition">Approve</button>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+};
+
+
 const ExpertManagementPage: React.FC = () => {
     const [experts, setExperts] = useState<UserProfile[]>([]);
     const [loading, setLoading] = useState(true);
@@ -820,23 +962,22 @@ const ExpertManagementPage: React.FC = () => {
 
         setLoading(true);
         try {
-            if (expertData.uid) { // Editing existing expert
+            if (expertData.uid) {
                 const { uid, ...dataToUpdate } = expertData;
                 await updateDoc(doc(db, 'users', uid), dataToUpdate);
                 alert("Expert updated successfully.");
-            } else { // Adding new expert
+            } else { 
                 if (!password) {
                    alert("Password is required for new experts.");
                    setLoading(false);
                    return;
                 }
-                // Use a temporary app instance to create the user without signing in the current admin
                 const tempApp = initializeApp(firebaseConfig, 'temp-user-creation' + Date.now());
                 const tempAuth = getAuth(tempApp);
                 const userCredential = await createUserWithEmailAndPassword(tempAuth, expertData.email, password);
                 const newUid = userCredential.user!.uid;
                 
-                const newUserProfile: Omit<UserProfile, 'uid'> = {
+                const newUserProfile = {
                     email: expertData.email,
                     displayName: expertData.displayName,
                     role: 'Expert',
@@ -845,7 +986,6 @@ const ExpertManagementPage: React.FC = () => {
                     categories: expertData.categories || []
                 };
                 
-                // Using a plain object for setDoc
                 await setDoc(doc(db, 'users', newUid), newUserProfile);
 
                 await signOut(tempAuth);
@@ -958,7 +1098,7 @@ const ExpertEditModal: React.FC<{ isOpen: boolean; onClose: () => void; expert: 
         } else {
             if (currentCategories.length >= 3) {
                 alert('An expert can be assigned a maximum of 3 categories.');
-                return; // Prevent adding more than 3
+                return;
             }
             newCategories = [...currentCategories, category];
         }
@@ -1044,6 +1184,7 @@ const AppContent: React.FC = () => {
                     <Route path="/article/:id" element={<ProtectedRoute element={<ArticleEditorPage />} />} />
                     <Route path="/profile" element={<ProtectedRoute element={<ProfilePage />} />} />
                     <Route path="/experts" element={<AdminRoute element={<ExpertManagementPage />} />} />
+                    <Route path="/discovery" element={<AdminRoute element={<TopicDiscoveryPage />} />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
             </main>

@@ -8,6 +8,8 @@ export enum ArticleStatus {
   Published = 'Published',
 }
 
+export type ArticleType = 'Trending Topic' | 'Positive News';
+
 export interface UserProfile {
   uid: string;
   email: string;
@@ -21,6 +23,7 @@ export interface UserProfile {
 export interface Article {
   id: string;
   title: string;
+  articleType: ArticleType; // New field to categorize content
   categories: string[];
   shortDescription?: string;
   flashContent?: string;
@@ -34,4 +37,18 @@ export interface Article {
   expertDisplayName?: string;
   adminRevisionNotes?: string;
   likeCount?: number;
+  sourceUrl?: string; // For Positive News attribution
+  sourceTitle?: string; // For Positive News attribution
+}
+
+export interface SuggestedTopic {
+    id: string;
+    title: string;
+    shortDescription: string;
+    categories: string[];
+    articleType: ArticleType;
+    region: string;
+    createdAt: Timestamp;
+    sourceUrl?: string;
+    sourceTitle?: string;
 }
