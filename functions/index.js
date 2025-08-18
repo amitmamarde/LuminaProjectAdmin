@@ -1,5 +1,6 @@
-// This file uses modern ES Module syntax (`import`/`export`) and the modern secrets management required for a successful deployment.
-import * as functions from "firebase-functions";
+// This file uses the modern ES Module syntax and the v2 Cloud Functions API for a successful deployment.
+import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import admin from "firebase-admin";
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -11,12 +12,19 @@ const db = admin.firestore();
  * This Cloud Function automatically triggers when a new document is created in the 'articles' collection.
  * It generates the main content for the article using the Gemini API.
  */
-export const generateArticleContent = functions.region("europe-west1")
-  .runWith({ secrets: ["GEMINI_API_KEY"] })
-  .firestore
-  .document("articles/{articleId}")
-  .onCreate(async (snapshot, context) => {
-    const articleId = context.params.articleId;
+export const generateArticleContent = onDocumentCreated({
+  document: "articles/{articleId}",
+  region: "europe-west1",
+  secrets: ["GEMINI_API_KEY"],
+}, async (event) => {
+    const articleId = event.params.articleId;
+    const snapshot = event.data;
+
+    if (!snapshot) {
+      console.log(`[${articleId}] Event is missing data snapshot. Exiting.`);
+      return;
+    }
+    
     const geminiApiKey = process.env.GEMINI_API_KEY;
 
     if (!geminiApiKey) {
@@ -111,9 +119,11 @@ export const generateArticleContent = functions.region("europe-west1")
  * This scheduled Cloud Function runs every 6 hours to automatically discover trending topics
  * and positive news stories using a search-grounded AI model.
  */
-export const discoverTopics = functions.region("europe-west1")
-  .runWith({ secrets: ["GEMINI_API_KEY"] })
-  .pubsub.schedule("every 6 hours").onRun(async (context) => {
+export const discoverTopics = onSchedule({
+    schedule: "every 6 hours",
+    region: "europe-west1",
+    secrets: ["GEMINI_API_KEY"],
+}, async (event) => {
     console.log("Running scheduled topic discovery...");
     const geminiApiKey = process.env.GEMINI_API_KEY;
 
