@@ -1,5 +1,4 @@
-import firebase from 'firebase/app';
-import 'firebase/firestore';
+import { Timestamp } from 'firebase/firestore';
 
 export enum ArticleStatus {
   Draft = 'Draft',
@@ -33,8 +32,8 @@ export interface Article {
   imagePrompt?: string;
   imageUrl?: string;
   status: ArticleStatus;
-  createdAt: firebase.firestore.Timestamp;
-  publishedAt?: firebase.firestore.Timestamp;
+  createdAt: Timestamp;
+  publishedAt?: Timestamp;
   expertId?: string;
   expertDisplayName?: string;
   adminRevisionNotes?: string;
@@ -50,7 +49,7 @@ export interface SuggestedTopic {
     categories: string[];
     articleType: ArticleType;
     region: string;
-    createdAt: firebase.firestore.Timestamp;
+    createdAt: Timestamp;
     sourceUrl?: string;
     sourceTitle?: string;
 }
