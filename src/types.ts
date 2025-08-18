@@ -25,6 +25,7 @@ export interface Article {
   title: string;
   articleType: ArticleType; // New field to categorize content
   categories: string[];
+  region?: string;
   shortDescription?: string;
   flashContent?: string;
   deepDiveContent?: string;
