@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, createContext, useContext, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, createContext, useContext, useMemo, useRef } from 'react';
 import {
   HashRouter,
   Link,
@@ -480,6 +480,31 @@ const DashboardPage: React.FC = () => {
     );
 };
 
+const MarkdownToolbar: React.FC<{ onApplyFormat: (format: 'bold' | 'italic' | 'h2' | 'list') => void }> = ({ onApplyFormat }) => {
+    const buttons = [
+        { label: 'B', format: 'bold' as const, title: 'Bold' },
+        { label: 'I', format: 'italic' as const, title: 'Italic' },
+        { label: 'H2', format: 'h2' as const, title: 'Heading 2' },
+        { label: '•', format: 'list' as const, title: 'List Item' },
+    ];
+
+    return (
+        <div className="flex items-center space-x-2 border border-b-0 border-gray-300 rounded-t-md p-2 bg-gray-50">
+            {buttons.map(({ label, format, title }) => (
+                <button
+                    key={format}
+                    onClick={(e) => { e.preventDefault(); onApplyFormat(format); }}
+                    title={title}
+                    className="px-3 py-1 text-sm font-semibold text-brand-text-secondary hover:bg-gray-200 rounded-md"
+                    aria-label={`Apply ${title} format`}
+                >
+                    {label === 'B' ? <span className="font-bold">B</span> : label === 'I' ? <span className="italic">I</span> : label}
+                </button>
+            ))}
+        </div>
+    );
+};
+
 const ArticleEditorPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const { userData } = useAuth();
@@ -493,6 +518,7 @@ const ArticleEditorPage: React.FC = () => {
     const [revisionNotes, setRevisionNotes] = useState('');
     const [viewMode, setViewMode] = useState<'edit' | 'preview'>('preview');
     const [verifiedExpert, setVerifiedExpert] = useState<UserProfile | null>(null);
+    const deepDiveRef = useRef<HTMLTextAreaElement>(null);
 
 
     useEffect(() => {
@@ -635,12 +661,68 @@ const ArticleEditorPage: React.FC = () => {
         setRevisionModalOpen(false);
     };
 
+    const handleApplyFormat = (format: 'bold' | 'italic' | 'h2' | 'list') => {
+        const textarea = deepDiveRef.current;
+        if (!textarea) return;
+
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = textarea.value;
+        const selectedText = text.substring(start, end);
+
+        let prefix = '';
+        let suffix = '';
+        let placeholder = '';
+
+        switch (format) {
+            case 'bold':
+                prefix = '**';
+                suffix = '**';
+                placeholder = 'bold text';
+                break;
+            case 'italic':
+                prefix = '*';
+                suffix = '*';
+                placeholder = 'italic text';
+                break;
+            case 'h2':
+                prefix = `\n## `;
+                suffix = '\n';
+                placeholder = 'Heading';
+                break;
+            case 'list':
+                prefix = '\n* ';
+                suffix = '';
+                placeholder = 'List item';
+                break;
+        }
+
+        const textToInsert = selectedText ? `${prefix}${selectedText}${suffix}` : `${prefix}${placeholder}${suffix}`;
+        const newText = text.substring(0, start) + textToInsert + text.substring(end);
+        
+        setDeepDiveContent(newText);
+        
+        setTimeout(() => {
+            textarea.focus();
+            if (selectedText) {
+                textarea.setSelectionRange(start, start + textToInsert.length);
+            } else {
+                const cursorPosition = start + prefix.length;
+                textarea.setSelectionRange(cursorPosition, cursorPosition + placeholder.length);
+            }
+        }, 0);
+    };
+
     const renderMarkdown = (markdown: string) => {
-      // Pre-process the markdown to fix formatting issues from the AI,
-      // like headings or lists not being on their own lines.
+      // Pre-process markdown to fix common, minor syntax errors from the AI.
       const processedMarkdown = markdown
-        .replace(/(\S)(##\s*)/g, '$1\n\n$2') // Add newlines before ##
-        .replace(/(\S)(\*\s+)/g, '$1\n\n$2'); // Add newlines before list items (* )
+        // Fixes cases like "**word:* " -> "**word**: "
+        .replace(/\*\*([^*:]+):\*(?![*\w])/g, '**$1**:')
+        // Fixes cases like "**word*" -> "**word**" (must run after the one above).
+        .replace(/\*\*([^*]+)\*(?![*\w])/g, '**$1**')
+        // Ensure headings and list items are on their own lines for proper parsing.
+        .replace(/(\S)(##\s*)/g, '$1\n\n$2')
+        .replace(/(\S)(\*\s+)/g, '$1\n\n$2');
 
       const html = processedMarkdown
         .replace(/^##\s*(.*$)/gim, '<h2 class="text-2xl font-bold mt-6 mb-3 text-brand-text-primary">$1</h2>')
@@ -732,12 +814,16 @@ const ArticleEditorPage: React.FC = () => {
                             )}
                         </div>
                         {(viewMode === 'edit' && isEditable) ? (
-                             <textarea 
-                                value={deepDiveContent} 
-                                onChange={e => setDeepDiveContent(e.target.value)} 
-                                className="w-full p-3 border rounded-md h-96 resize-y font-mono"
-                                aria-label="Deep Dive Article Content (Markdown)"
-                            />
+                             <div>
+                                <MarkdownToolbar onApplyFormat={handleApplyFormat} />
+                                <textarea 
+                                    ref={deepDiveRef}
+                                    value={deepDiveContent} 
+                                    onChange={e => setDeepDiveContent(e.target.value)} 
+                                    className="w-full p-3 border border-t-0 rounded-b-md h-96 resize-y font-mono focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                                    aria-label="Deep Dive Article Content (Markdown)"
+                                />
+                            </div>
                         ) : (
                             <div 
                                 className="p-4 border rounded-md bg-gray-50 min-h-96" 
@@ -856,6 +942,7 @@ const TopicDiscoveryPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [regionFilter, setRegionFilter] = useState('all');
     const [articleTypeFilter, setArticleTypeFilter] = useState('all');
+    const [categoryFilter, setCategoryFilter] = useState('all');
 
     const fetchSuggestions = useCallback(async () => {
         setLoading(true);
@@ -874,9 +961,10 @@ const TopicDiscoveryPage: React.FC = () => {
         return suggestions.filter(suggestion => {
             const regionMatch = regionFilter === 'all' || suggestion.region === regionFilter;
             const typeMatch = articleTypeFilter === 'all' || suggestion.articleType === articleTypeFilter;
-            return regionMatch && typeMatch;
+            const categoryMatch = categoryFilter === 'all' || suggestion.categories?.includes(categoryFilter);
+            return regionMatch && typeMatch && categoryMatch;
         });
-    }, [suggestions, regionFilter, articleTypeFilter]);
+    }, [suggestions, regionFilter, articleTypeFilter, categoryFilter]);
 
     const handleApprove = async (suggestion: SuggestedTopic) => {
         try {
@@ -932,6 +1020,10 @@ const TopicDiscoveryPage: React.FC = () => {
                     <option value="all">All Types</option>
                     <option value="Trending Topic">Trending Topic</option>
                     <option value="Positive News">Positive News</option>
+                </select>
+                <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="w-full md:w-auto px-4 py-2 border rounded-md">
+                    <option value="all">All Categories</option>
+                    {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
             </div>
             
