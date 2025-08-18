@@ -55,6 +55,7 @@ const CATEGORIES = [
   'Education & Learning',
   'Arts, Media & Creativity'
 ];
+const REGIONS = ['Worldwide', 'USA', 'India', 'Europe'];
 
 
 // --- Authentication Context ---
@@ -275,6 +276,7 @@ const DashboardPage: React.FC = () => {
     const [statusFilter, setStatusFilter] = useState('all');
     const [categoryFilter, setCategoryFilter] = useState('all');
     const [articleTypeFilter, setArticleTypeFilter] = useState('all');
+    const [regionFilter, setRegionFilter] = useState('all');
 
     const fetchArticles = useCallback(async () => {
         if (!userData) return;
@@ -309,6 +311,9 @@ const DashboardPage: React.FC = () => {
         if (articleTypeFilter !== 'all') {
             processedArticles = processedArticles.filter(art => art.articleType === articleTypeFilter);
         }
+        if (regionFilter !== 'all') {
+            processedArticles = processedArticles.filter(art => art.region === regionFilter);
+        }
 
         if (userData?.role === 'Expert') {
             processedArticles = processedArticles.filter(art => {
@@ -320,7 +325,7 @@ const DashboardPage: React.FC = () => {
         }
         
         return processedArticles;
-    }, [articles, statusFilter, categoryFilter, articleTypeFilter, userData]);
+    }, [articles, statusFilter, categoryFilter, articleTypeFilter, regionFilter, userData]);
 
     const handleCreateDraft = async () => {
         if (!newTitle || newCategories.length === 0 || !newArticleType) {
@@ -392,6 +397,10 @@ const DashboardPage: React.FC = () => {
                     <option value="Trending Topic">Trending Topic</option>
                     <option value="Positive News">Positive News</option>
                 </select>
+                 <select value={regionFilter} onChange={e => setRegionFilter(e.target.value)} className="w-full md:w-auto px-4 py-2 border rounded-md">
+                    <option value="all">All Regions</option>
+                    {REGIONS.map(reg => <option key={reg} value={reg}>{reg}</option>)}
+                </select>
             </div>
 
             {filteredArticles.length === 0 ? (
@@ -403,6 +412,7 @@ const DashboardPage: React.FC = () => {
                     {filteredArticles.map(article => {
                         const isPositiveNews = article.articleType === 'Positive News';
                         const typeTagColor = isPositiveNews ? 'bg-pink-200 text-pink-800' : 'bg-purple-200 text-purple-800';
+                        const regionTagColor = 'bg-gray-200 text-gray-800';
 
                         return (
                             <Link to={`/article/${article.id}`} key={article.id} className="block bg-brand-surface rounded-lg shadow hover:shadow-xl transition-shadow duration-300 p-6 flex flex-col">
@@ -415,6 +425,11 @@ const DashboardPage: React.FC = () => {
                                         <span className={`px-3 py-1 text-xs font-semibold rounded-full ${typeTagColor}`}>
                                             {article.articleType}
                                         </span>
+                                        {article.region && (
+                                            <span className={`px-3 py-1 text-xs font-semibold rounded-full ${regionTagColor}`}>
+                                                {article.region}
+                                            </span>
+                                        )}
                                     </div>
                                     <p className="text-brand-text-secondary text-sm mb-4">Categories: {article.categories?.join(', ')}</p>
                                 </div>
@@ -621,10 +636,16 @@ const ArticleEditorPage: React.FC = () => {
     };
 
     const renderMarkdown = (markdown: string) => {
-      const html = markdown
-        .replace(/^## (.*$)/gim, '<h2 class="text-2xl font-bold mt-6 mb-3 text-brand-text-primary">$1</h2>')
+      // Pre-process the markdown to fix formatting issues from the AI,
+      // like headings or lists not being on their own lines.
+      const processedMarkdown = markdown
+        .replace(/(\S)(##\s*)/g, '$1\n\n$2') // Add newlines before ##
+        .replace(/(\S)(\*\s+)/g, '$1\n\n$2'); // Add newlines before list items (* )
+
+      const html = processedMarkdown
+        .replace(/^##\s*(.*$)/gim, '<h2 class="text-2xl font-bold mt-6 mb-3 text-brand-text-primary">$1</h2>')
         .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-brand-text-primary">$1</strong>')
-        .replace(/^\* (.*$)/gim, '<li class="ml-6 list-disc mb-1">$1</li>')
+        .replace(/^\*\s*(.*$)/gim, '<li class="ml-6 list-disc mb-1">$1</li>')
         .replace(/((<li.*<\/li>)+)/gs, '<ul>$1</ul>')
         .split('\n\n')
         .map(paragraph => {
@@ -643,6 +664,7 @@ const ArticleEditorPage: React.FC = () => {
     
     const isPositiveNews = article.articleType === 'Positive News';
     const typeTagColor = isPositiveNews ? 'bg-pink-200 text-pink-800' : 'bg-purple-200 text-purple-800';
+    const regionTagColor = 'bg-gray-200 text-gray-800';
 
     return (
         <div className="container mx-auto px-6 py-8">
@@ -653,6 +675,11 @@ const ArticleEditorPage: React.FC = () => {
                              <span className={`px-3 py-1 text-sm font-semibold rounded-full ${typeTagColor}`}>
                                 {article.articleType}
                             </span>
+                            {article.region && (
+                                <span className={`px-3 py-1 text-sm font-semibold rounded-full ${regionTagColor}`}>
+                                    {article.region}
+                                </span>
+                            )}
                         </div>
                         <h1 className="text-4xl font-extrabold text-brand-text-primary">{article.title}</h1>
                         <p className="text-brand-text-secondary mt-1">Categories: {article.categories?.join(', ')}</p>
@@ -827,6 +854,8 @@ const ProfilePage: React.FC = () => {
 const TopicDiscoveryPage: React.FC = () => {
     const [suggestions, setSuggestions] = useState<SuggestedTopic[]>([]);
     const [loading, setLoading] = useState(true);
+    const [regionFilter, setRegionFilter] = useState('all');
+    const [articleTypeFilter, setArticleTypeFilter] = useState('all');
 
     const fetchSuggestions = useCallback(async () => {
         setLoading(true);
@@ -840,6 +869,14 @@ const TopicDiscoveryPage: React.FC = () => {
     useEffect(() => {
         fetchSuggestions();
     }, [fetchSuggestions]);
+    
+    const filteredSuggestions = useMemo(() => {
+        return suggestions.filter(suggestion => {
+            const regionMatch = regionFilter === 'all' || suggestion.region === regionFilter;
+            const typeMatch = articleTypeFilter === 'all' || suggestion.articleType === articleTypeFilter;
+            return regionMatch && typeMatch;
+        });
+    }, [suggestions, regionFilter, articleTypeFilter]);
 
     const handleApprove = async (suggestion: SuggestedTopic) => {
         try {
@@ -849,6 +886,7 @@ const TopicDiscoveryPage: React.FC = () => {
                 articleType: suggestion.articleType,
                 shortDescription: suggestion.shortDescription,
                 categories: suggestion.categories,
+                region: suggestion.region,
                 status: ArticleStatusEnum.Draft,
                 createdAt: serverTimestamp(),
                 sourceUrl: suggestion.sourceUrl || null,
@@ -883,12 +921,27 @@ const TopicDiscoveryPage: React.FC = () => {
         <div className="container mx-auto px-6 py-8">
             <h1 className="text-3xl font-bold text-brand-text-primary mb-6">Topic Discovery</h1>
             <p className="text-brand-text-secondary mb-8">Review AI-generated topic suggestions. Approving a topic will create a new draft and trigger the AI to write the full article.</p>
+
+            <div className="bg-brand-surface rounded-lg shadow p-4 mb-6 flex flex-col md:flex-row items-center gap-4">
+                <h3 className="text-lg font-semibold text-brand-text-primary">Filters:</h3>
+                <select value={regionFilter} onChange={e => setRegionFilter(e.target.value)} className="w-full md:w-auto px-4 py-2 border rounded-md">
+                    <option value="all">All Regions</option>
+                    {REGIONS.map(reg => <option key={reg} value={reg}>{reg}</option>)}
+                </select>
+                <select value={articleTypeFilter} onChange={e => setArticleTypeFilter(e.target.value)} className="w-full md:w-auto px-4 py-2 border rounded-md">
+                    <option value="all">All Types</option>
+                    <option value="Trending Topic">Trending Topic</option>
+                    <option value="Positive News">Positive News</option>
+                </select>
+            </div>
             
-            {suggestions.length === 0 ? (
-                <p className="text-center text-brand-text-secondary mt-12 text-lg">No new topic suggestions at the moment. The AI engine runs every few hours.</p>
+            {filteredSuggestions.length === 0 ? (
+                <p className="text-center text-brand-text-secondary mt-12 text-lg">
+                    {suggestions.length === 0 ? "No new topic suggestions at the moment. The AI engine runs every few hours." : "No suggestions match your current filters."}
+                </p>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {suggestions.map(suggestion => {
+                    {filteredSuggestions.map(suggestion => {
                         const isPositiveNews = suggestion.articleType === 'Positive News';
                         const typeTagColor = isPositiveNews ? 'bg-pink-200 text-pink-800' : 'bg-purple-200 text-purple-800';
                         const regionTagColor = 'bg-gray-200 text-gray-800';
