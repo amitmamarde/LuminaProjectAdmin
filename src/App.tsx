@@ -8,7 +8,7 @@ import {
   useNavigate,
   useParams,
 } from 'react-router-dom';
-import * as firebase from 'firebase/app';
+import { initializeApp, getApp, getApps, deleteApp } from 'firebase/app.js';
 import {
   getAuth,
   onAuthStateChanged,
@@ -17,7 +17,7 @@ import {
   sendPasswordResetEmail,
   createUserWithEmailAndPassword,
   type User,
-} from 'firebase/auth';
+} from 'firebase/auth.js';
 import {
   getFirestore,
   collection,
@@ -33,8 +33,8 @@ import {
   getDocs,
   deleteDoc,
   limit,
-} from 'firebase/firestore';
-import { getStorage, ref, deleteObject } from 'firebase/storage';
+} from 'firebase/firestore.js';
+import { getStorage, ref, deleteObject } from 'firebase/storage.js';
 import ReactQuill from 'react-quill';
 import DOMPurify from 'dompurify';
 
@@ -52,7 +52,7 @@ const firebaseConfig = {
 };
 
 // --- Firebase Initialization (v9+) ---
-const app = !firebase.getApps().length ? firebase.initializeApp(firebaseConfig) : firebase.getApp();
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
@@ -1188,7 +1188,7 @@ const ExpertManagementPage: React.FC = () => {
                 // In a real-world app, this should be a Cloud Function callable only by an Admin.
                 // The temporary app workaround is complex and can still expose config.
                 // For this project, we accept the limitation.
-                const tempApp = firebase.initializeApp(firebaseConfig, 'temp-user-creation-' + Date.now());
+                const tempApp = initializeApp(firebaseConfig, 'temp-user-creation-' + Date.now());
                 const tempAuth = getAuth(tempApp);
                 const userCredential = await createUserWithEmailAndPassword(tempAuth, expertData.email, password);
                 const newUid = userCredential.user!.uid;
@@ -1205,7 +1205,7 @@ const ExpertManagementPage: React.FC = () => {
                 await setDoc(doc(db, 'users', newUid), newUserProfile);
 
                 await signOut(tempAuth);
-                await firebase.deleteApp(tempApp);
+                await deleteApp(tempApp);
                 alert("Expert created successfully.");
             }
             handleModalClose();
