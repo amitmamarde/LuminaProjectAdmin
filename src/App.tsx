@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, createContext, useContext, useMemo } from 'react';
-import { HashRouter, Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
-import { initializeApp, deleteApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, sendPasswordResetEmail, signOut, createUserWithEmailAndPassword, type User } from 'firebase/auth';
-import { getFirestore, collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, query, where, orderBy, serverTimestamp, setDoc } from 'firebase/firestore';
-import { getStorage, ref, deleteObject } from 'firebase/storage';
+import { HashRouter, Link, Redirect, Route, Switch, useHistory, useParams } from 'react-router-dom';
+import firebase from 'firebase/app';
+import 'firebase/auth';
+import 'firebase/firestore';
+import 'firebase/storage';
 import ReactQuill from 'react-quill';
 import DOMPurify from 'dompurify';
 
@@ -23,11 +23,13 @@ const firebaseConfig = {
 };
 
 
-// --- Firebase Initialization (v9 Modular) ---
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
+// --- Firebase Initialization (v8 Compat) ---
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
+const auth = firebase.auth();
+const db = firebase.firestore();
+const storage = firebase.storage();
 
 
 // --- App-wide Constants ---
@@ -47,7 +49,7 @@ const REGIONS = ['Worldwide', 'USA', 'India', 'Europe'];
 
 // --- Authentication Context ---
 interface AuthContextType {
-  user: User | null;
+  user: firebase.User | null;
   userData: UserProfile | null;
   loading: boolean;
 }
@@ -55,20 +57,20 @@ const AuthContext = createContext<AuthContextType>({ user: null, userData: null,
 const useAuth = () => useContext(AuthContext);
 
 const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<firebase.User | null>(null);
   const [userData, setUserData] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
       setLoading(true);
       if (firebaseUser) {
-        const userDocRef = doc(db, 'users', firebaseUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        if (userDocSnap.exists()) {
+        const userDocRef = db.collection('users').doc(firebaseUser.uid);
+        const userDocSnap = await userDocRef.get();
+        if (userDocSnap.exists) {
           const fetchedUserData = { uid: firebaseUser.uid, ...userDocSnap.data() } as UserProfile;
           if (fetchedUserData.status === 'disabled') {
-              await signOut(auth);
+              await auth.signOut();
               setUser(null);
               setUserData(null);
               alert('Your account has been disabled. Please contact an administrator.');
@@ -78,7 +80,7 @@ const AuthProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
           }
         } else {
           setUserData(null);
-          await signOut(auth);
+          await auth.signOut();
         }
       } else {
         setUser(null);
@@ -141,11 +143,11 @@ const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: string; chi
 
 const Header: React.FC = () => {
   const { userData } = useAuth();
-  const navigate = useNavigate();
+  const history = useHistory();
 
   const handleLogout = async () => {
-    await signOut(auth);
-    navigate('/login');
+    await auth.signOut();
+    history.push('/login');
   };
 
   return (
@@ -187,15 +189,15 @@ const LoginPage: React.FC = () => {
   const [resetEmail, setResetEmail] = useState('');
   const [resetMessage, setResetMessage] = useState('');
 
-  const navigate = useNavigate();
+  const history = useHistory();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      navigate('/');
+      await auth.signInWithEmailAndPassword(email, password);
+      history.push('/');
     } catch (err: any) {
       setError(err.message || 'Failed to login. Please check your credentials.');
     } finally {
@@ -209,7 +211,7 @@ const LoginPage: React.FC = () => {
           return;
       }
       try {
-          await sendPasswordResetEmail(auth, resetEmail);
+          await auth.sendPasswordResetEmail(resetEmail);
           setResetMessage("Success! If an account with that email exists, a password reset link has been sent.");
       } catch (error: any) {
           setResetMessage(`Error: ${error.message}`);
@@ -268,16 +270,13 @@ const DashboardPage: React.FC = () => {
     const fetchArticles = useCallback(async () => {
         if (!userData) return;
         setLoading(true);
-        let articlesQuery;
+        let articlesQuery: firebase.firestore.Query<firebase.firestore.DocumentData> = db.collection('articles');
 
-        const articlesCollection = collection(db, 'articles');
-        if (userData.role === 'Admin') {
-            articlesQuery = articlesCollection;
-        } else {
-            articlesQuery = query(articlesCollection, where('status', '!=', 'Draft'), orderBy('status'), orderBy('createdAt', 'desc'));
+        if (userData.role !== 'Admin') {
+            articlesQuery = articlesQuery.where('status', '!=', 'Draft').orderBy('status').orderBy('createdAt', 'desc');
         }
         
-        const querySnapshot = await getDocs(articlesQuery);
+        const querySnapshot = await articlesQuery.get();
         const fetchedArticles = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Article));
         setArticles(fetchedArticles);
         setLoading(false);
@@ -321,13 +320,13 @@ const DashboardPage: React.FC = () => {
             return;
         }
         try {
-            await addDoc(collection(db, 'articles'), {
+            await db.collection('articles').add({
                 title: newTitle,
                 articleType: newArticleType,
                 shortDescription: newShortDescription,
                 categories: newCategories,
                 status: ArticleStatusEnum.Draft,
-                createdAt: serverTimestamp(),
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             });
             setNewTitle('');
             setNewShortDescription('');
@@ -471,7 +470,7 @@ const DashboardPage: React.FC = () => {
 const ArticleEditorPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const { userData } = useAuth();
-    const navigate = useNavigate();
+    const history = useHistory();
     const [article, setArticle] = useState<Article | null>(null);
     const [loading, setLoading] = useState(true);
     const [flashContent, setFlashContent] = useState('');
@@ -494,27 +493,27 @@ const ArticleEditorPage: React.FC = () => {
         if (!id) return;
         const fetchArticle = async () => {
             setLoading(true);
-            const docRef = doc(db, 'articles', id);
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
+            const docRef = db.collection('articles').doc(id);
+            const docSnap = await docRef.get();
+            if (docSnap.exists) {
                 const data = { id: docSnap.id, ...docSnap.data() } as Article;
                 setArticle(data);
                 setFlashContent(data.flashContent || '');
                 setDeepDiveContent(data.deepDiveContent || '');
             } else {
-                navigate('/');
+                history.push('/');
             }
             setLoading(false);
         };
         fetchArticle();
-    }, [id, navigate]);
+    }, [id, history]);
     
     useEffect(() => {
         const fetchExpertProfile = async () => {
             if (article?.status === ArticleStatusEnum.Published && article.expertId) {
-                const expertDocRef = doc(db, 'users', article.expertId);
-                const expertDocSnap = await getDoc(expertDocRef);
-                if (expertDocSnap.exists()) {
+                const expertDocRef = db.collection('users').doc(article.expertId);
+                const expertDocSnap = await expertDocRef.get();
+                if (expertDocSnap.exists) {
                     setVerifiedExpert(expertDocSnap.data() as UserProfile);
                 }
             } else {
@@ -531,10 +530,10 @@ const ArticleEditorPage: React.FC = () => {
     const handleUpdate = async (updates: Partial<Article>, stayOnPage: boolean = false) => {
         if (!id) return;
         try {
-            await updateDoc(doc(db, 'articles', id), updates);
+            await db.collection('articles').doc(id).update(updates);
             alert('Article updated successfully!');
             if (!stayOnPage) {
-                navigate('/');
+                history.push('/');
             } else {
                  setArticle(prev => prev ? {...prev, ...updates} : null);
             }
@@ -550,15 +549,15 @@ const ArticleEditorPage: React.FC = () => {
         try {
             if (article.imageUrl) {
                 try {
-                    const fileRef = ref(storage, `articles/${id}/header.jpg`);
-                    await deleteObject(fileRef);
+                    const fileRef = storage.ref(`articles/${id}/header.jpg`);
+                    await fileRef.delete();
                 } catch (storageError: any) {
                     console.error("Could not delete storage file, it might not exist:", storageError);
                 }
             }
-            await deleteDoc(doc(db, 'articles', id));
+            await db.collection('articles').doc(id).delete();
             alert('Article deleted successfully.');
-            navigate('/');
+            history.push('/');
         } catch(e) {
             console.error("Error deleting article:", e);
             alert('Failed to delete article.');
@@ -582,7 +581,7 @@ const ArticleEditorPage: React.FC = () => {
         };
 
         try {
-            await updateDoc(doc(db, 'articles', id), newUpdates);
+            await db.collection('articles').doc(id).update(newUpdates);
             setArticle(prev => prev ? {...prev, ...newUpdates} : null);
             alert("Article claimed successfully!");
         } catch (e: any) {
@@ -610,7 +609,7 @@ const ArticleEditorPage: React.FC = () => {
     const handlePublish = () => {
         handleUpdate({
             status: ArticleStatusEnum.Published,
-            publishedAt: serverTimestamp()
+            publishedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
     };
     
@@ -635,7 +634,7 @@ const ArticleEditorPage: React.FC = () => {
 
     return (
         <div className="container mx-auto px-6 py-8">
-            <div className="bg-brand-surface p-8 rounded-lg shadow-lg">
+            <div className="bg-brand-surface p-8 rounded-lg shadow-lg mb-24"> {/* Add margin-bottom to prevent overlap with sticky footer */}
                 <div className="flex justify-between items-start mb-4">
                     <div>
                         <div className="flex items-center gap-3 mb-1">
@@ -687,7 +686,7 @@ const ArticleEditorPage: React.FC = () => {
                                 value={deepDiveContent} 
                                 onChange={setDeepDiveContent}
                                 modules={quillModules}
-                                className="h-96 mb-12"
+                                className="min-h-[400px]" // Use min-height instead of fixed height
                               />
                             </div>
                         ) : (
@@ -699,8 +698,10 @@ const ArticleEditorPage: React.FC = () => {
                         )}
                     </div>
                 </div>
-
-                <div className="mt-8 pt-6 border-t flex flex-wrap justify-end items-center gap-4">
+            </div>
+            {/* Sticky Action Bar */}
+            <div className="fixed bottom-0 left-0 right-0 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.1)] z-30">
+                <div className="container mx-auto px-6 py-4 flex flex-wrap justify-end items-center gap-4">
                     {userData.role === 'Expert' && article.status === ArticleStatusEnum.AwaitingExpertReview && !article.expertId && article.categories?.some(cat => userData.categories?.includes(cat)) &&(
                         <button onClick={handleClaim} className="bg-brand-accent text-white px-6 py-2 rounded-md hover:bg-amber-600 transition">Claim Article</button>
                     )}
@@ -719,9 +720,10 @@ const ArticleEditorPage: React.FC = () => {
                      {userData.role === 'Admin' && (
                         <button onClick={() => setDeleteModalOpen(true)} className="bg-red-600 text-white px-6 py-2 rounded-md hover:bg-red-700 transition">Delete Article</button>
                     )}
-                    <button onClick={() => navigate(-1)} className="bg-gray-500 text-white px-6 py-2 rounded-md hover:bg-gray-600 transition">Back</button>
+                    <button onClick={() => history.goBack()} className="bg-gray-500 text-white px-6 py-2 rounded-md hover:bg-gray-600 transition">Back</button>
                 </div>
             </div>
+
             <Modal isOpen={isRevisionModalOpen} onClose={() => setRevisionModalOpen(false)} title="Send for Revision">
                 <p className="mb-4">Please provide clear notes for the expert on what needs to be changed.</p>
                 <textarea value={revisionNotes} onChange={e => setRevisionNotes(e.target.value)} className="w-full p-2 border rounded-md h-40" />
@@ -756,7 +758,7 @@ const ProfilePage: React.FC = () => {
         if (!user) return;
         setLoading(true);
         try {
-            await updateDoc(doc(db, 'users', user.uid), { displayName, showNameToPublic });
+            await db.collection('users').doc(user.uid).update({ displayName, showNameToPublic });
             alert('Profile updated successfully!');
         } catch (error) {
             console.error("Error updating profile:", error);
@@ -812,8 +814,8 @@ const TopicDiscoveryPage: React.FC = () => {
 
     const fetchSuggestions = useCallback(async () => {
         setLoading(true);
-        const q = query(collection(db, 'suggested_topics'), orderBy('createdAt', 'desc'));
-        const querySnapshot = await getDocs(q);
+        const q = db.collection('suggested_topics').orderBy('createdAt', 'desc');
+        const querySnapshot = await q.get();
         const fetchedSuggestions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SuggestedTopic));
         setSuggestions(fetchedSuggestions);
         setLoading(false);
@@ -835,20 +837,20 @@ const TopicDiscoveryPage: React.FC = () => {
     const handleApprove = async (suggestion: SuggestedTopic) => {
         try {
             // 1. Create a new article from the suggestion
-            await addDoc(collection(db, 'articles'), {
+            await db.collection('articles').add({
                 title: suggestion.title,
                 articleType: suggestion.articleType,
                 shortDescription: suggestion.shortDescription,
                 categories: suggestion.categories,
                 region: suggestion.region,
                 status: ArticleStatusEnum.Draft,
-                createdAt: serverTimestamp(),
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 sourceUrl: suggestion.sourceUrl || null,
                 sourceTitle: suggestion.sourceTitle || null,
             });
 
             // 2. Delete the suggestion
-            await deleteDoc(doc(db, 'suggested_topics', suggestion.id));
+            await db.collection('suggested_topics').doc(suggestion.id).delete();
 
             alert(`'${suggestion.title}' approved. The AI will now generate the full article.`);
             fetchSuggestions(); // Refresh the list
@@ -860,7 +862,7 @@ const TopicDiscoveryPage: React.FC = () => {
 
     const handleReject = async (suggestionId: string) => {
         try {
-            await deleteDoc(doc(db, 'suggested_topics', suggestionId));
+            await db.collection('suggested_topics').doc(suggestionId).delete();
             alert("Suggestion rejected and removed.");
             fetchSuggestions(); // Refresh the list
         } catch (error) {
@@ -939,8 +941,8 @@ const ExpertManagementPage: React.FC = () => {
 
     const fetchExperts = useCallback(async () => {
         setLoading(true);
-        const q = query(collection(db, 'users'), where('role', '==', 'Expert'));
-        const querySnapshot = await getDocs(q);
+        const q = db.collection('users').where('role', '==', 'Expert');
+        const querySnapshot = await q.get();
         const fetchedExperts = querySnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
         setExperts(fetchedExperts);
         setLoading(false);
@@ -975,7 +977,7 @@ const ExpertManagementPage: React.FC = () => {
         try {
             if (expertData.uid) {
                 const { uid, ...dataToUpdate } = expertData;
-                await updateDoc(doc(db, 'users', uid), dataToUpdate);
+                await db.collection('users').doc(uid).update(dataToUpdate);
                 alert("Expert updated successfully.");
             } else { 
                 if (!password) {
@@ -983,9 +985,9 @@ const ExpertManagementPage: React.FC = () => {
                    setLoading(false);
                    return;
                 }
-                const tempApp = initializeApp(firebaseConfig, 'temp-user-creation' + Date.now());
-                const tempAuth = getAuth(tempApp);
-                const userCredential = await createUserWithEmailAndPassword(tempAuth, expertData.email, password);
+                const tempApp = firebase.initializeApp(firebaseConfig, 'temp-user-creation' + Date.now());
+                const tempAuth = tempApp.auth();
+                const userCredential = await tempAuth.createUserWithEmailAndPassword(expertData.email, password);
                 const newUid = userCredential.user!.uid;
                 
                 const newUserProfile = {
@@ -997,10 +999,10 @@ const ExpertManagementPage: React.FC = () => {
                     categories: expertData.categories || []
                 };
                 
-                await setDoc(doc(db, 'users', newUid), newUserProfile);
+                await db.collection('users').doc(newUid).set(newUserProfile);
 
-                await signOut(tempAuth);
-                await deleteApp(tempApp);
+                await tempAuth.signOut();
+                await tempApp.delete();
                 alert("Expert created successfully.");
             }
             handleModalClose();
@@ -1158,7 +1160,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
     if (loading) {
         return <Spinner />;
     }
-    return user ? children : <Navigate to="/login" />;
+    return user ? children : <Redirect to="/login" />;
 };
 
 const AdminRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
@@ -1166,7 +1168,7 @@ const AdminRoute: React.FC<{ children: React.ReactElement }> = ({ children }) =>
     if (loading) {
         return <Spinner />;
     }
-    return userData?.role === 'Admin' ? children : <Navigate to="/" />;
+    return userData?.role === 'Admin' ? children : <Redirect to="/" />;
 };
 
 
@@ -1194,15 +1196,25 @@ const AppContent: React.FC = () => {
         <HashRouter>
             {user && <Header />}
             <main>
-                <Routes>
-                    <Route path="/login" element={<LoginPage />} />
-                    <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-                    <Route path="/article/:id" element={<ProtectedRoute><ArticleEditorPage /></ProtectedRoute>} />
-                    <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-                    <Route path="/experts" element={<AdminRoute><ExpertManagementPage /></AdminRoute>} />
-                    <Route path="/discovery" element={<AdminRoute><TopicDiscoveryPage /></AdminRoute>} />
-                    <Route path="*" element={<Navigate to="/" />} />
-                </Routes>
+                <Switch>
+                    <Route path="/login" component={LoginPage} />
+                    <Route exact path="/">
+                      <ProtectedRoute><DashboardPage /></ProtectedRoute>
+                    </Route>
+                    <Route path="/article/:id">
+                      <ProtectedRoute><ArticleEditorPage /></ProtectedRoute>
+                    </Route>
+                    <Route path="/profile">
+                      <ProtectedRoute><ProfilePage /></ProtectedRoute>
+                    </Route>
+                    <Route path="/experts">
+                      <AdminRoute><ExpertManagementPage /></AdminRoute>
+                    </Route>
+                    <Route path="/discovery">
+                      <AdminRoute><TopicDiscoveryPage /></AdminRoute>
+                    </Route>
+                    <Redirect to="/" />
+                </Switch>
             </main>
         </HashRouter>
     );
