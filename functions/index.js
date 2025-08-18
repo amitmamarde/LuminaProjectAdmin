@@ -154,29 +154,69 @@ export const discoverTopics = functions.region("europe-west1")
         },
         required: ["suggestions"]
     };
+    
+    const allCategories = "['Science & Technology', 'Health & Wellness', 'History & Culture', 'Politics & Society', 'Digital & Media Literacy', 'Business & Finance', 'Environment & Sustainability', 'Education & Learning', 'Arts, Media & Creativity']";
 
     for (const config of discoveryConfigs) {
         console.log(`Discovering ${config.articleType} for ${config.region}...`);
         
-        let prompt;
-        if (config.articleType === 'Positive News') {
-            prompt = `Using Google Search, find 5 recent, uplifting, and positive news stories from ${config.region}. For each story, provide a concise title, a short 1-2 sentence description, suggest up to 3 relevant categories from the list [Science & Technology, Health & Wellness, History & Culture, Politics & Society, Digital & Media Literacy, Business & Finance, Environment & Sustainability, Education & Learning, Arts, Media & Creativity], and include the source URL and source title.`;
-        } else { // Trending Topic
-            prompt = `Using Google Search, find the top 5 trending news topics in ${config.region} right now. For each topic, provide a neutral, factual title, a short 1-2 sentence description explaining its significance, and suggest up to 3 relevant categories from the list [Science & Technology, Health & Wellness, History & Culture, Politics & Society, Digital & Media Literacy, Business & Finance, Environment & Sustainability, Education & Learning, Arts, Media & Creativity]. The source URL and title are not needed.`;
-        }
-
         try {
-            const response = await ai.models.generateContent({
+            // STEP 1: Use Google Search to get grounded, up-to-date information.
+            // We cannot request JSON directly when using the googleSearch tool.
+            let searchPrompt;
+            if (config.articleType === 'Positive News') {
+                searchPrompt = `Using Google Search, find 5 recent, uplifting, and positive news stories from ${config.region}. Summarize them and include their sources.`;
+            } else { // Trending Topic
+                searchPrompt = `Using Google Search, find the top 5 trending news topics in ${config.region} right now. Summarize their significance.`;
+            }
+
+            const groundedResponse = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
-                contents: [{ parts: [{ text: prompt }] }],
-                tools: [{ googleSearch: {} }],
+                contents: [{ parts: [{ text: searchPrompt }] }],
+                config: {
+                    tools: [{ googleSearch: {} }],
+                },
+            });
+
+            const groundedText = groundedResponse.text;
+            const groundingChunks = groundedResponse.candidates?.[0]?.groundingMetadata?.groundingChunks;
+
+            if (!groundedText) {
+                console.log(`No grounded text returned for ${config.articleType} in ${config.region}. Skipping.`);
+                continue;
+            }
+
+            // STEP 2: Use a second call to structure the grounded text into the desired JSON format.
+            let jsonExtractionPrompt;
+            const sourcesInfo = groundingChunks?.map(chunk => `Title: "${chunk.web.title}", URL: "${chunk.web.uri}"`).join('\n') || 'No sources provided.';
+            
+            if (config.articleType === 'Positive News') {
+                jsonExtractionPrompt = `From the following text and list of sources, extract up to 5 distinct positive news stories. Format them into a JSON object matching the provided schema. Ensure the 'sourceUrl' and 'sourceTitle' fields are populated accurately from the provided sources list.
+Categories must be from this list: ${allCategories}.
+
+Sources:
+${sourcesInfo}
+
+Text:
+${groundedText}`;
+            } else { // Trending Topic
+                jsonExtractionPrompt = `From the following text, extract up to 5 distinct trending topics. Format them into a JSON object matching the provided schema. The 'sourceUrl' and 'sourceTitle' fields are not required and can be omitted.
+Categories must be from this list: ${allCategories}.
+
+Text:
+${groundedText}`;
+            }
+            
+            const jsonResponse = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: [{ parts: [{ text: jsonExtractionPrompt }] }],
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: promptSchema,
                 },
             });
 
-            const jsonString = response.text.trim();
+            const jsonString = jsonResponse.text.trim();
             const result = JSON.parse(jsonString);
 
             if (result.suggestions && result.suggestions.length > 0) {
@@ -184,6 +224,12 @@ export const discoverTopics = functions.region("europe-west1")
                 let newSuggestionCount = 0;
 
                 for (const suggestion of result.suggestions) {
+                    // Sanity check for suggestion title
+                    if (!suggestion.title || typeof suggestion.title !== 'string' || suggestion.title.trim() === '') {
+                        console.warn('Skipping suggestion with invalid title:', suggestion);
+                        continue;
+                    }
+                
                     const existingQuery = db.collection('suggested_topics')
                         .where('title', '==', suggestion.title)
                         .where('region', '==', config.region)
