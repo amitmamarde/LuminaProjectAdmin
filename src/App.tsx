@@ -8,7 +8,7 @@ import {
   useNavigate,
   useParams,
 } from 'react-router-dom';
-import { initializeApp, getApp, getApps, deleteApp } from 'firebase/app';
+import * as firebaseApp from 'firebase/app';
 import {
   getAuth,
   onAuthStateChanged,
@@ -32,6 +32,7 @@ import {
   orderBy,
   getDocs,
   deleteDoc,
+  limit,
 } from 'firebase/firestore';
 import { getStorage, ref, deleteObject } from 'firebase/storage';
 import ReactQuill from 'react-quill';
@@ -51,7 +52,7 @@ const firebaseConfig = {
 };
 
 // --- Firebase Initialization (v9+) ---
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+const app = !firebaseApp.getApps().length ? firebaseApp.initializeApp(firebaseConfig) : firebaseApp.getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
@@ -156,21 +157,210 @@ const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: string; chi
 };
 
 // --- Page & Feature Components ---
+
+// --- Public Components ---
+
+const PublicHeader: React.FC = () => {
+    return (
+        <header className="bg-brand-surface shadow-md sticky top-0 z-40">
+            <div className="container mx-auto px-6 py-4 flex justify-between items-center">
+                <Link to="/" className="text-2xl font-bold text-brand-primary">Lumina</Link>
+                <nav>
+                    <Link to="/login" className="px-4 py-2 bg-brand-primary text-white rounded-md hover:bg-indigo-700 transition">
+                        Curator Login
+                    </Link>
+                </nav>
+            </div>
+        </header>
+    );
+};
+
+const HomePage: React.FC = () => {
+    const { user, loading } = useAuth();
+    const [latestArticles, setLatestArticles] = useState<Article[]>([]);
+    const [contentLoading, setContentLoading] = useState(true);
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (!loading && user) {
+            navigate('/dashboard', { replace: true });
+        }
+    }, [user, loading, navigate]);
+
+    useEffect(() => {
+        const fetchLatest = async () => {
+            setContentLoading(true);
+            const articlesRef = collection(db, 'articles');
+            const q = query(
+                articlesRef, 
+                where('status', '==', ArticleStatusEnum.Published), 
+                orderBy('publishedAt', 'desc'),
+                limit(3)
+            );
+            const querySnapshot = await getDocs(q);
+            const fetchedArticles = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Article));
+            setLatestArticles(fetchedArticles);
+            setContentLoading(false);
+        };
+        fetchLatest();
+    }, []);
+
+    if (loading || user) {
+        return <div className="h-screen w-screen flex items-center justify-center"><Spinner /></div>;
+    }
+    
+    return (
+        <div className="bg-brand-background">
+            <PublicHeader />
+            <main>
+                <section className="bg-brand-primary text-white text-center py-20 px-6">
+                    <h1 className="text-5xl font-extrabold mb-4">Clarity in a Complex World</h1>
+                    <p className="text-xl max-w-3xl mx-auto mb-8 text-indigo-100">Verified, unbiased news and uplifting stories, curated by AI and validated by human experts. Get the flash summary or the deep dive—the choice is yours.</p>
+                    <Link to="/feed" className="bg-brand-accent text-white font-bold py-3 px-8 rounded-full hover:bg-amber-500 transition-transform transform hover:scale-105 text-lg">
+                        Start Reading
+                    </Link>
+                </section>
+                <section className="container mx-auto px-6 py-16">
+                    <h2 className="text-3xl font-bold text-center text-brand-text-primary mb-10">Latest from Lumina</h2>
+                    {contentLoading ? <Spinner /> : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                            {latestArticles.map(article => (
+                                <Link to={`/view/${article.id}`} key={article.id} className="block bg-brand-surface rounded-lg shadow-md hover:shadow-2xl transition-shadow duration-300 overflow-hidden group">
+                                    {article.imageUrl && <img src={article.imageUrl} alt={article.title} className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"/>}
+                                    <div className="p-6">
+                                        <p className="text-sm text-brand-primary font-semibold mb-2">{article.categories.join(', ')}</p>
+                                        <h3 className="text-xl font-bold text-brand-text-primary mb-3">{article.title}</h3>
+                                        <p className="text-brand-text-secondary text-sm">{article.flashContent?.substring(0, 100)}...</p>
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+                    )}
+                </section>
+            </main>
+        </div>
+    );
+};
+
+const ArticleFeedPage: React.FC = () => {
+    const [articles, setArticles] = useState<Article[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchArticles = async () => {
+            setLoading(true);
+            const articlesRef = collection(db, 'articles');
+            const q = query(articlesRef, where('status', '==', ArticleStatusEnum.Published), orderBy('publishedAt', 'desc'));
+            const querySnapshot = await getDocs(q);
+            setArticles(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Article)));
+            setLoading(false);
+        };
+        fetchArticles();
+    }, []);
+
+    if (loading) return <div className="h-screen w-screen flex items-center justify-center"><Spinner /></div>;
+    
+    return (
+        <div className="h-screen w-screen overflow-y-scroll snap-y snap-mandatory bg-black">
+            <PublicHeader />
+            {articles.map(article => (
+                <section key={article.id} className="h-screen w-full snap-start flex items-center justify-center relative text-white p-8">
+                    {article.imageUrl && (
+                        <div 
+                            className="absolute inset-0 bg-cover bg-center transition-all duration-500" 
+                            style={{ backgroundImage: `url(${article.imageUrl})` }}
+                        >
+                            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+                        </div>
+                    )}
+                    <div className="relative z-10 max-w-2xl text-center flex flex-col items-center h-full justify-center">
+                        <div className="flex-grow flex flex-col items-center justify-center">
+                            <h1 className="text-4xl md:text-5xl font-extrabold mb-4" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>{article.title}</h1>
+                            <p className="text-lg md:text-xl mb-8 leading-relaxed">{article.flashContent}</p>
+                        </div>
+                        <Link to={`/view/${article.id}`} className="mt-auto bg-white text-brand-text-primary font-bold py-3 px-8 rounded-full hover:bg-gray-200 transition-transform transform hover:scale-105">
+                            Read Full Story
+                        </Link>
+                    </div>
+                </section>
+            ))}
+        </div>
+    );
+};
+
+const PublicArticleView: React.FC = () => {
+    const { id } = useParams<{ id: string }>();
+    const [article, setArticle] = useState<Article | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [verifiedExpert, setVerifiedExpert] = useState<UserProfile | null>(null);
+
+    useEffect(() => {
+        if (!id) return;
+        const fetchArticle = async () => {
+            setLoading(true);
+            const docRef = doc(db, 'articles', id);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists() && docSnap.data().status === ArticleStatusEnum.Published) {
+                const articleData = { id: docSnap.id, ...docSnap.data() } as Article;
+                setArticle(articleData);
+                if (articleData.expertId) {
+                    const expertDocRef = doc(db, 'users', articleData.expertId);
+                    const expertDocSnap = await getDoc(expertDocRef);
+                    if (expertDocSnap.exists()) {
+                        setVerifiedExpert(expertDocSnap.data() as UserProfile);
+                    }
+                }
+            } else {
+                setArticle(null); // Or redirect to a 404 page
+            }
+            setLoading(false);
+        };
+        fetchArticle();
+    }, [id]);
+
+    if (loading) return <div className="h-screen w-screen flex items-center justify-center"><Spinner /></div>;
+    if (!article) return <div className="text-center py-20"><h1>Article not found or not published.</h1><Link to="/" className="text-brand-primary hover:underline">Go Home</Link></div>;
+
+    return (
+        <div className="bg-brand-background min-h-screen">
+             <PublicHeader />
+             <article className="max-w-4xl mx-auto py-12 px-6">
+                {article.imageUrl && <img src={article.imageUrl} alt={article.title} className="w-full h-auto max-h-96 object-cover rounded-xl mb-8 shadow-lg" />}
+                <div className="bg-brand-surface p-8 sm:p-12 rounded-lg shadow-lg">
+                    <p className="text-brand-primary font-bold mb-2">{article.categories?.join(', ')}</p>
+                    <h1 className="text-4xl md:text-5xl font-extrabold text-brand-text-primary mb-4">{article.title}</h1>
+                    <div className="text-brand-text-secondary border-b pb-4 mb-6 text-sm">
+                        Published on {article.publishedAt?.toDate().toLocaleDateString()}
+                        {verifiedExpert?.showNameToPublic && ` • Verified by ${verifiedExpert.displayName}`}
+                    </div>
+                    <div
+                        className="prose prose-lg max-w-none prose-h2:text-brand-text-primary prose-h2:border-b prose-h2:pb-2 prose-strong:text-brand-text-primary"
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(article.deepDiveContent || '') }}
+                    />
+                </div>
+             </article>
+        </div>
+    );
+};
+
+
+// --- Curation Platform Components ---
 const Header: React.FC = () => {
   const { userData } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
     await signOut(auth);
-    navigate('/login');
+    navigate('/');
   };
 
   return (
     <header className="bg-brand-surface shadow-md sticky top-0 z-40">
       <div className="container mx-auto px-6 py-4 flex justify-between items-center">
-        <Link to="/" className="text-2xl font-bold text-brand-primary">Lumina Platform</Link>
+        <Link to="/dashboard" className="text-2xl font-bold text-brand-primary">Lumina Platform</Link>
         {userData && (
           <nav className="flex items-center space-x-6">
+            <Link to="/dashboard" className="text-brand-text-secondary hover:text-brand-primary font-medium">Dashboard</Link>
             {userData.role === 'Admin' && (
               <>
                 <Link to="/discovery" className="text-brand-text-secondary hover:text-brand-primary font-medium">Topic Discovery</Link>
@@ -204,7 +394,7 @@ const LoginPage: React.FC = () => {
     setError('');
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      navigate('/');
+      navigate('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Failed to login. Please check your credentials.');
     } finally {
@@ -228,7 +418,7 @@ const LoginPage: React.FC = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-brand-background">
       <div className="max-w-md w-full bg-brand-surface p-8 rounded-xl shadow-lg">
-        <h1 className="text-3xl font-bold text-center text-brand-primary mb-2">Lumina Content Platform</h1>
+        <h1 className="text-3xl font-bold text-center text-brand-primary mb-2">Lumina Curator Login</h1>
         <p className="text-center text-brand-text-secondary mb-8">Content Curation & Validation Platform</p>
         <form onSubmit={handleLogin}>
           {error && <p className="bg-red-100 text-red-700 p-3 rounded-md mb-4">{error}</p>}
@@ -284,7 +474,7 @@ const DashboardPage: React.FC = () => {
         if (userData.role !== 'Admin') {
             articlesQuery = query(articlesRef, where('status', '!=', 'Draft'), orderBy('status'), orderBy('createdAt', 'desc'));
         } else {
-             articlesQuery = query(articlesRef, orderBy('status'), orderBy('createdAt', 'desc'));
+             articlesQuery = query(articlesRef, orderBy('createdAt', 'desc'));
         }
 
         const querySnapshot = await getDocs(articlesQuery);
@@ -512,7 +702,7 @@ const ArticleEditorPage: React.FC = () => {
                 setFlashContent(data.flashContent || '');
                 setDeepDiveContent(data.deepDiveContent || '');
             } else {
-                navigate('/');
+                navigate('/dashboard');
             }
             setLoading(false);
         };
@@ -544,7 +734,7 @@ const ArticleEditorPage: React.FC = () => {
             await updateDoc(doc(db, 'articles', id), updates);
             alert('Article updated successfully!');
             if (!stayOnPage) {
-                navigate('/');
+                navigate('/dashboard');
             } else {
                  setArticle(prev => prev ? {...prev, ...updates} : null);
             }
@@ -568,7 +758,7 @@ const ArticleEditorPage: React.FC = () => {
             }
             await deleteDoc(doc(db, 'articles', id));
             alert('Article deleted successfully.');
-            navigate('/');
+            navigate('/dashboard');
         } catch(e) {
             console.error("Error deleting article:", e);
             alert('Failed to delete article.');
@@ -998,7 +1188,7 @@ const ExpertManagementPage: React.FC = () => {
                 // In a real-world app, this should be a Cloud Function callable only by an Admin.
                 // The temporary app workaround is complex and can still expose config.
                 // For this project, we accept the limitation.
-                const tempApp = initializeApp(firebaseConfig, 'temp-user-creation-' + Date.now());
+                const tempApp = firebaseApp.initializeApp(firebaseConfig, 'temp-user-creation-' + Date.now());
                 const tempAuth = getAuth(tempApp);
                 const userCredential = await createUserWithEmailAndPassword(tempAuth, expertData.email, password);
                 const newUid = userCredential.user!.uid;
@@ -1015,7 +1205,7 @@ const ExpertManagementPage: React.FC = () => {
                 await setDoc(doc(db, 'users', newUid), newUserProfile);
 
                 await signOut(tempAuth);
-                await deleteApp(tempApp);
+                await firebaseApp.deleteApp(tempApp);
                 alert("Expert created successfully.");
             }
             handleModalClose();
@@ -1170,14 +1360,14 @@ const ExpertEditModal: React.FC<{ isOpen: boolean; onClose: () => void; expert: 
 
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
     const { user, loading } = useAuth();
-    if (loading) return <Spinner />;
+    if (loading) return <div className="h-screen w-screen flex items-center justify-center"><Spinner /></div>;
     return user ? children : <Navigate to="/login" replace />;
 };
 
 const AdminRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
     const { userData, loading } = useAuth();
-    if (loading) return <Spinner />;
-    return userData?.role === 'Admin' ? children : <Navigate to="/" replace />;
+    if (loading) return <div className="h-screen w-screen flex items-center justify-center"><Spinner /></div>;
+    return userData?.role === 'Admin' ? children : <Navigate to="/dashboard" replace />;
 };
 
 // --- Main App Component ---
@@ -1190,7 +1380,7 @@ function App() {
 }
 
 const AppContent: React.FC = () => {
-    const { user, loading } = useAuth();
+    const { loading } = useAuth();
 
     if (loading) {
       return (
@@ -1202,15 +1392,23 @@ const AppContent: React.FC = () => {
     
     return (
         <HashRouter>
-            {user && <Header />}
             <main>
                 <Routes>
+                    {/* Public Routes */}
+                    <Route path="/" element={<HomePage />} />
+                    <Route path="/feed" element={<ArticleFeedPage />} />
+                    <Route path="/view/:id" element={<PublicArticleView />} />
+                    
+                    {/* Auth Route */}
                     <Route path="/login" element={<LoginPage />} />
-                    <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-                    <Route path="/article/:id" element={<ProtectedRoute><ArticleEditorPage /></ProtectedRoute>} />
-                    <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-                    <Route path="/experts" element={<AdminRoute><ExpertManagementPage /></AdminRoute>} />
-                    <Route path="/discovery" element={<AdminRoute><TopicDiscoveryPage /></AdminRoute>} />
+
+                    {/* Curation Platform (Protected) Routes */}
+                    <Route path="/dashboard" element={<ProtectedRoute><><Header /><DashboardPage /></></ProtectedRoute>} />
+                    <Route path="/article/:id" element={<ProtectedRoute><><Header /><ArticleEditorPage /></></ProtectedRoute>} />
+                    <Route path="/profile" element={<ProtectedRoute><><Header /><ProfilePage /></></ProtectedRoute>} />
+                    <Route path="/experts" element={<AdminRoute><><Header /><ExpertManagementPage /></></AdminRoute>} />
+                    <Route path="/discovery" element={<AdminRoute><><Header /><TopicDiscoveryPage /></></AdminRoute>} />
+                    
                     <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
             </main>
