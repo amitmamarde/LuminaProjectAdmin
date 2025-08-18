@@ -1,23 +1,8 @@
 import React, { useState, useEffect, useCallback, createContext, useContext, useMemo, useRef } from 'react';
-import {
-  HashRouter,
-  Link,
-  Navigate,
-  Route,
-  Routes,
-  useNavigate,
-  useParams,
-} from 'react-router-dom';
+import { HashRouter, Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { initializeApp, getApps, getApp, deleteApp } from 'firebase/app';
-import {
-  getAuth,
-  onAuthStateChanged,
-  signOut,
-  signInWithEmailAndPassword,
-  sendPasswordResetEmail,
-  createUserWithEmailAndPassword,
-  type User,
-} from 'firebase/auth';
+import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword, sendPasswordResetEmail, createUserWithEmailAndPassword } from 'firebase/auth';
+import type { User } from 'firebase/auth';
 import { getFirestore, collection, doc, getDoc, setDoc, updateDoc, addDoc, serverTimestamp, query, where, orderBy, getDocs, deleteDoc } from 'firebase/firestore';
 import { getStorage, ref, deleteObject } from 'firebase/storage';
 
@@ -516,7 +501,6 @@ const ArticleEditorPage: React.FC = () => {
     const [isRevisionModalOpen, setRevisionModalOpen] = useState(false);
     const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
     const [revisionNotes, setRevisionNotes] = useState('');
-    const [viewMode, setViewMode] = useState<'edit' | 'preview'>('preview');
     const [verifiedExpert, setVerifiedExpert] = useState<UserProfile | null>(null);
     const deepDiveRef = useRef<HTMLTextAreaElement>(null);
 
@@ -558,10 +542,6 @@ const ArticleEditorPage: React.FC = () => {
     const isExpertOwner = userData?.role === 'Expert' && article?.expertId === userData.uid;
     const canExpertEdit = isExpertOwner && (article?.status === ArticleStatusEnum.AwaitingExpertReview || article?.status === ArticleStatusEnum.NeedsRevision);
     const isEditable = canExpertEdit || userData?.role === 'Admin';
-    
-    useEffect(() => {
-        setViewMode(isEditable ? 'edit' : 'preview');
-    }, [isEditable]);
 
     const handleUpdate = async (updates: Partial<Article>, stayOnPage: boolean = false) => {
         if (!id) return;
@@ -714,12 +694,10 @@ const ArticleEditorPage: React.FC = () => {
     };
 
     const renderMarkdown = (markdown: string) => {
-      // Pre-process markdown to fix common, minor syntax errors from the AI.
+      // Pre-process markdown to ensure proper parsing.
       const processedMarkdown = markdown
-        // Fixes cases like "**word:* " -> "**word**: "
-        .replace(/\*\*([^*:]+):\*(?![*\w])/g, '**$1**:')
-        // Fixes cases like "**word*" -> "**word**" (must run after the one above).
-        .replace(/\*\*([^*]+)\*(?![*\w])/g, '**$1**')
+        // The previous pre-processing for bold tags was too aggressive and could break valid markdown.
+        // It has been removed to ensure correct rendering.
         // Ensure headings and list items are on their own lines for proper parsing.
         .replace(/(\S)(##\s*)/g, '$1\n\n$2')
         .replace(/(\S)(\*\s+)/g, '$1\n\n$2');
@@ -796,33 +774,28 @@ const ArticleEditorPage: React.FC = () => {
                     <div>
                         <div className="flex justify-between items-center mb-2">
                             <h3 className="text-2xl font-bold text-brand-text-primary">Deep Dive (Full Article)</h3>
-                            {isEditable && (
-                                <div className="flex items-center space-x-1 border border-gray-300 rounded-lg p-1 bg-gray-100">
-                                    <button 
-                                        onClick={() => setViewMode('edit')}
-                                        className={`px-3 py-1 text-sm rounded-md transition-colors ${viewMode === 'edit' ? 'bg-white shadow-sm text-brand-primary' : 'bg-transparent text-brand-text-secondary hover:bg-gray-200'}`}
-                                    >
-                                        Edit
-                                    </button>
-                                    <button 
-                                        onClick={() => setViewMode('preview')}
-                                        className={`px-3 py-1 text-sm rounded-md transition-colors ${viewMode === 'preview' ? 'bg-white shadow-sm text-brand-primary' : 'bg-transparent text-brand-text-secondary hover:bg-gray-200'}`}
-                                    >
-                                        Preview
-                                    </button>
-                                </div>
-                            )}
                         </div>
-                        {(viewMode === 'edit' && isEditable) ? (
-                             <div>
-                                <MarkdownToolbar onApplyFormat={handleApplyFormat} />
-                                <textarea 
-                                    ref={deepDiveRef}
-                                    value={deepDiveContent} 
-                                    onChange={e => setDeepDiveContent(e.target.value)} 
-                                    className="w-full p-3 border border-t-0 rounded-b-md h-96 resize-y font-mono focus:outline-none focus:ring-2 focus:ring-brand-primary"
-                                    aria-label="Deep Dive Article Content (Markdown)"
-                                />
+                        { isEditable ? (
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-brand-text-secondary mb-2">Markdown Editor</label>
+                                    <MarkdownToolbar onApplyFormat={handleApplyFormat} />
+                                    <textarea 
+                                        ref={deepDiveRef}
+                                        value={deepDiveContent} 
+                                        onChange={e => setDeepDiveContent(e.target.value)} 
+                                        className="w-full p-3 border border-t-0 rounded-b-md h-96 resize-y font-mono focus:outline-none focus:ring-2 focus:ring-brand-primary"
+                                        aria-label="Deep Dive Article Content (Markdown)"
+                                    />
+                                </div>
+                                <div>
+                                     <label className="block text-sm font-medium text-brand-text-secondary mb-2">Live Preview</label>
+                                     <div 
+                                        className="p-4 border rounded-md bg-gray-50 h-96 overflow-y-auto" 
+                                        dangerouslySetInnerHTML={renderMarkdown(deepDiveContent)}
+                                        aria-label="Formatted Deep Dive Article Content Preview"
+                                    />
+                                </div>
                             </div>
                         ) : (
                             <div 
