@@ -1,7 +1,23 @@
 import React, { useState, useEffect, useCallback, createContext, useContext, useMemo } from 'react';
-import * as ReactRouterDOM from 'react-router-dom';
-import * as firebaseApp from 'firebase/app';
-import * as firebaseAuth from 'firebase/auth';
+import {
+  HashRouter,
+  Link,
+  Navigate,
+  Route,
+  Routes,
+  useNavigate,
+  useParams,
+} from 'react-router-dom';
+import { initializeApp, getApp, getApps, deleteApp } from 'firebase/app';
+import {
+  getAuth,
+  onAuthStateChanged,
+  signOut,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  createUserWithEmailAndPassword,
+  type User,
+} from 'firebase/auth';
 import {
   getFirestore,
   collection,
@@ -24,12 +40,6 @@ import DOMPurify from 'dompurify';
 
 import type { UserProfile, Article, ArticleStatus, ArticleType, SuggestedTopic } from './types';
 import { ArticleStatus as ArticleStatusEnum } from './types';
-
-// Destructure from namespace imports to fix module resolution errors without changing component logic.
-const { HashRouter, Link, Navigate, Route, Routes, useNavigate, useParams } = ReactRouterDOM;
-const { initializeApp, getApp, getApps, deleteApp } = firebaseApp;
-const { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword, sendPasswordResetEmail, createUserWithEmailAndPassword } = firebaseAuth;
-type User = firebaseAuth.User;
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
