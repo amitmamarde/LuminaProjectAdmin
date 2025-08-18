@@ -2,44 +2,26 @@ import React, { useState, useEffect, useCallback, createContext, useContext, use
 import {
   HashRouter,
   Link,
-  Navigate,
+  Redirect,
   Route,
-  Routes,
-  useNavigate,
+  Switch,
+  useHistory,
   useParams,
 } from 'react-router-dom';
-import { initializeApp, getApp, getApps, deleteApp } from 'firebase/app';
-import {
-  getAuth,
-  onAuthStateChanged,
-  signOut,
-  signInWithEmailAndPassword,
-  sendPasswordResetEmail,
-  createUserWithEmailAndPassword,
-  type User,
-} from 'firebase/auth';
-import {
-  getFirestore,
-  collection,
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  addDoc,
-  serverTimestamp,
-  query,
-  where,
-  orderBy,
-  getDocs,
-  deleteDoc,
-  limit,
-} from 'firebase/firestore';
-import { getStorage, ref, deleteObject } from 'firebase/storage';
+import firebase from 'firebase/app';
+import 'firebase/auth';
+import 'firebase/firestore';
+import 'firebase/storage';
+
 import ReactQuill from 'react-quill';
 import DOMPurify from 'dompurify';
 
 import type { UserProfile, Article, ArticleStatus, ArticleType, SuggestedTopic } from './types';
 import { ArticleStatus as ArticleStatusEnum } from './types';
+
+// --- Type alias for Firebase User ---
+type User = firebase.User;
+
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -51,11 +33,13 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-// --- Firebase Initialization (v9+) ---
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
+// --- Firebase Initialization (v8 compat) ---
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
+const auth = firebase.auth();
+const db = firebase.firestore();
+const storage = firebase.storage();
 
 // --- App-wide Constants ---
 const CATEGORIES = [
@@ -80,15 +64,15 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
       setLoading(true);
       if (firebaseUser) {
-        const userDocRef = doc(db, 'users', firebaseUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        if (userDocSnap.exists()) {
+        const userDocRef = db.collection('users').doc(firebaseUser.uid);
+        const userDocSnap = await userDocRef.get();
+        if (userDocSnap.exists) {
           const fetchedUserData = { uid: firebaseUser.uid, ...userDocSnap.data() } as UserProfile;
           if (fetchedUserData.status === 'disabled') {
-            await signOut(auth);
+            await auth.signOut();
             setUser(null);
             setUserData(null);
             alert('Your account has been disabled. Please contact an administrator.');
@@ -98,7 +82,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
           }
         } else {
           setUserData(null);
-          await signOut(auth);
+          await auth.signOut();
         }
       } else {
         setUser(null);
@@ -179,25 +163,23 @@ const HomePage: React.FC = () => {
     const { user, loading } = useAuth();
     const [latestArticles, setLatestArticles] = useState<Article[]>([]);
     const [contentLoading, setContentLoading] = useState(true);
-    const navigate = useNavigate();
+    const history = useHistory();
 
     useEffect(() => {
         if (!loading && user) {
-            navigate('/dashboard', { replace: true });
+            history.replace('/dashboard');
         }
-    }, [user, loading, navigate]);
+    }, [user, loading, history]);
 
     useEffect(() => {
         const fetchLatest = async () => {
             setContentLoading(true);
-            const articlesRef = collection(db, 'articles');
-            const q = query(
-                articlesRef,
-                where('status', '==', ArticleStatusEnum.Published),
-                orderBy('publishedAt', 'desc'),
-                limit(3)
-            );
-            const querySnapshot = await getDocs(q);
+            const articlesRef = db.collection('articles');
+            const q = articlesRef
+                .where('status', '==', ArticleStatusEnum.Published)
+                .orderBy('publishedAt', 'desc')
+                .limit(3);
+            const querySnapshot = await q.get();
             const fetchedArticles = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Article));
             setLatestArticles(fetchedArticles);
             setContentLoading(false);
@@ -249,9 +231,9 @@ const ArticleFeedPage: React.FC = () => {
     useEffect(() => {
         const fetchArticles = async () => {
             setLoading(true);
-            const articlesRef = collection(db, 'articles');
-            const q = query(articlesRef, where('status', '==', ArticleStatusEnum.Published), orderBy('publishedAt', 'desc'));
-            const querySnapshot = await getDocs(q);
+            const articlesRef = db.collection('articles');
+            const q = articlesRef.where('status', '==', ArticleStatusEnum.Published).orderBy('publishedAt', 'desc');
+            const querySnapshot = await q.get();
             setArticles(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Article)));
             setLoading(false);
         };
@@ -292,24 +274,16 @@ const PublicArticleView: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const [article, setArticle] = useState<Article | null>(null);
     const [loading, setLoading] = useState(true);
-    const [verifiedExpert, setVerifiedExpert] = useState<UserProfile | null>(null);
 
     useEffect(() => {
         if (!id) return;
         const fetchArticle = async () => {
             setLoading(true);
-            const docRef = doc(db, 'articles', id);
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists() && docSnap.data()?.status === ArticleStatusEnum.Published) {
+            const docRef = db.collection('articles').doc(id);
+            const docSnap = await docRef.get();
+            if (docSnap.exists && docSnap.data()?.status === ArticleStatusEnum.Published) {
                 const articleData = { id: docSnap.id, ...docSnap.data() } as Article;
                 setArticle(articleData);
-                if (articleData.expertId) {
-                    const expertDocRef = doc(db, 'users', articleData.expertId);
-                    const expertDocSnap = await getDoc(expertDocRef);
-                    if (expertDocSnap.exists()) {
-                        setVerifiedExpert(expertDocSnap.data() as UserProfile);
-                    }
-                }
             } else {
                 setArticle(null); // Or redirect to a 404 page
             }
@@ -331,7 +305,7 @@ const PublicArticleView: React.FC = () => {
                     <h1 className="text-4xl md:text-5xl font-extrabold text-brand-text-primary mb-4">{article.title}</h1>
                     <div className="text-brand-text-secondary border-b pb-4 mb-6 text-sm">
                         Published on {article.publishedAt?.toDate().toLocaleDateString()}
-                        {verifiedExpert?.showNameToPublic && ` • Verified by ${verifiedExpert.displayName}`}
+                        {article.expertShowNameToPublic && article.expertDisplayName && ` • Verified by ${article.expertDisplayName}`}
                     </div>
                     <div
                         className="prose prose-lg max-w-none prose-h2:text-brand-text-primary prose-h2:border-b prose-h2:pb-2 prose-strong:text-brand-text-primary"
@@ -347,11 +321,11 @@ const PublicArticleView: React.FC = () => {
 // --- Curation Platform Components ---
 const Header: React.FC = () => {
   const { userData } = useAuth();
-  const navigate = useNavigate();
+  const history = useHistory();
 
   const handleLogout = async () => {
-    await signOut(auth);
-    navigate('/');
+    await auth.signOut();
+    history.push('/');
   };
 
   return (
@@ -386,15 +360,15 @@ const LoginPage: React.FC = () => {
   const [isResetModalOpen, setResetModalOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [resetMessage, setResetMessage] = useState('');
-  const navigate = useNavigate();
+  const history = useHistory();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      navigate('/dashboard');
+      await auth.signInWithEmailAndPassword(email, password);
+      history.push('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Failed to login. Please check your credentials.');
     } finally {
@@ -408,7 +382,7 @@ const LoginPage: React.FC = () => {
       return;
     }
     try {
-      await sendPasswordResetEmail(auth, resetEmail);
+      await auth.sendPasswordResetEmail(resetEmail);
       setResetMessage("Success! If an account with that email exists, a password reset link has been sent.");
     } catch (error: any) {
       setResetMessage(`Error: ${error.message}`);
@@ -468,16 +442,16 @@ const DashboardPage: React.FC = () => {
         if (!userData) return;
         setLoading(true);
 
-        const articlesRef = collection(db, 'articles');
-        let articlesQuery;
+        const articlesRef = db.collection('articles');
+        let articlesQuery: firebase.firestore.Query<firebase.firestore.DocumentData>;
 
         if (userData.role !== 'Admin') {
-            articlesQuery = query(articlesRef, where('status', '!=', 'Draft'), orderBy('status'), orderBy('createdAt', 'desc'));
+            articlesQuery = articlesRef.where('status', '!=', 'Draft').orderBy('status').orderBy('createdAt', 'desc');
         } else {
-             articlesQuery = query(articlesRef, orderBy('createdAt', 'desc'));
+             articlesQuery = articlesRef.orderBy('createdAt', 'desc');
         }
 
-        const querySnapshot = await getDocs(articlesQuery);
+        const querySnapshot = await articlesQuery.get();
         const fetchedArticles = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Article));
         setArticles(fetchedArticles);
         setLoading(false);
@@ -521,13 +495,13 @@ const DashboardPage: React.FC = () => {
             return;
         }
         try {
-            await addDoc(collection(db, 'articles'), {
+            await db.collection('articles').add({
                 title: newTitle,
                 articleType: newArticleType,
                 shortDescription: newShortDescription,
                 categories: newCategories,
                 status: ArticleStatusEnum.Draft,
-                createdAt: serverTimestamp(),
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             });
             setNewTitle('');
             setNewShortDescription('');
@@ -671,7 +645,7 @@ const DashboardPage: React.FC = () => {
 const ArticleEditorPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const { userData } = useAuth();
-    const navigate = useNavigate();
+    const history = useHistory();
     const [article, setArticle] = useState<Article | null>(null);
     const [loading, setLoading] = useState(true);
     const [flashContent, setFlashContent] = useState('');
@@ -694,27 +668,27 @@ const ArticleEditorPage: React.FC = () => {
         if (!id) return;
         const fetchArticle = async () => {
             setLoading(true);
-            const docRef = doc(db, 'articles', id);
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
+            const docRef = db.collection('articles').doc(id);
+            const docSnap = await docRef.get();
+            if (docSnap.exists) {
                 const data = { id: docSnap.id, ...docSnap.data() } as Article;
                 setArticle(data);
                 setFlashContent(data.flashContent || '');
                 setDeepDiveContent(data.deepDiveContent || '');
             } else {
-                navigate('/dashboard');
+                history.push('/dashboard');
             }
             setLoading(false);
         };
         fetchArticle();
-    }, [id, navigate]);
+    }, [id, history]);
     
     useEffect(() => {
         const fetchExpertProfile = async () => {
             if (article?.status === ArticleStatusEnum.Published && article.expertId) {
-                const expertDocRef = doc(db, 'users', article.expertId);
-                const expertDocSnap = await getDoc(expertDocRef);
-                if (expertDocSnap.exists()) {
+                const expertDocRef = db.collection('users').doc(article.expertId);
+                const expertDocSnap = await expertDocRef.get();
+                if (expertDocSnap.exists) {
                     setVerifiedExpert(expertDocSnap.data() as UserProfile);
                 }
             } else {
@@ -731,10 +705,10 @@ const ArticleEditorPage: React.FC = () => {
     const handleUpdate = async (updates: Partial<Article>, stayOnPage: boolean = false) => {
         if (!id) return;
         try {
-            await updateDoc(doc(db, 'articles', id), updates);
+            await db.collection('articles').doc(id).update(updates);
             alert('Article updated successfully!');
             if (!stayOnPage) {
-                navigate('/dashboard');
+                history.push('/dashboard');
             } else {
                  setArticle(prev => prev ? {...prev, ...updates} : null);
             }
@@ -750,15 +724,15 @@ const ArticleEditorPage: React.FC = () => {
         try {
             if (article.imageUrl) {
                 try {
-                    const fileRef = ref(storage, `articles/${id}/header.jpg`);
-                    await deleteObject(fileRef);
+                    const fileRef = storage.ref(`articles/${id}/header.jpg`);
+                    await fileRef.delete();
                 } catch (storageError: any) {
                     console.error("Could not delete storage file, it might not exist:", storageError);
                 }
             }
-            await deleteDoc(doc(db, 'articles', id));
+            await db.collection('articles').doc(id).delete();
             alert('Article deleted successfully.');
-            navigate('/dashboard');
+            history.push('/dashboard');
         } catch(e) {
             console.error("Error deleting article:", e);
             alert('Failed to delete article.');
@@ -779,10 +753,11 @@ const ArticleEditorPage: React.FC = () => {
         const newUpdates = {
             expertId: userData.uid,
             expertDisplayName: userData.displayName,
+            expertShowNameToPublic: userData.showNameToPublic,
         };
 
         try {
-            await updateDoc(doc(db, 'articles', id), newUpdates);
+            await db.collection('articles').doc(id).update(newUpdates);
             setArticle(prev => prev ? {...prev, ...newUpdates} : null);
             alert("Article claimed successfully!");
         } catch (e: any) {
@@ -810,7 +785,7 @@ const ArticleEditorPage: React.FC = () => {
     const handlePublish = () => {
         handleUpdate({
             status: ArticleStatusEnum.Published,
-            publishedAt: serverTimestamp()
+            publishedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
     };
     
@@ -921,7 +896,7 @@ const ArticleEditorPage: React.FC = () => {
                      {userData.role === 'Admin' && (
                         <button onClick={() => setDeleteModalOpen(true)} className="bg-red-600 text-white px-6 py-2 rounded-md hover:bg-red-700 transition">Delete Article</button>
                     )}
-                    <button onClick={() => navigate(-1)} className="bg-gray-500 text-white px-6 py-2 rounded-md hover:bg-gray-600 transition">Back</button>
+                    <button onClick={() => history.goBack()} className="bg-gray-500 text-white px-6 py-2 rounded-md hover:bg-gray-600 transition">Back</button>
                 </div>
             </div>
 
@@ -959,7 +934,7 @@ const ProfilePage: React.FC = () => {
         if (!user) return;
         setLoading(true);
         try {
-            await updateDoc(doc(db, 'users', user.uid), { displayName, showNameToPublic });
+            await db.collection('users').doc(user.uid).update({ displayName, showNameToPublic });
             alert('Profile updated successfully!');
         } catch (error) {
             console.error("Error updating profile:", error);
@@ -1015,8 +990,8 @@ const TopicDiscoveryPage: React.FC = () => {
 
     const fetchSuggestions = useCallback(async () => {
         setLoading(true);
-        const q = query(collection(db, 'suggested_topics'), orderBy('createdAt', 'desc'));
-        const querySnapshot = await getDocs(q);
+        const q = db.collection('suggested_topics').orderBy('createdAt', 'desc');
+        const querySnapshot = await q.get();
         const fetchedSuggestions = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SuggestedTopic));
         setSuggestions(fetchedSuggestions);
         setLoading(false);
@@ -1037,19 +1012,19 @@ const TopicDiscoveryPage: React.FC = () => {
 
     const handleApprove = async (suggestion: SuggestedTopic) => {
         try {
-            await addDoc(collection(db, 'articles'), {
+            await db.collection('articles').add({
                 title: suggestion.title,
                 articleType: suggestion.articleType,
                 shortDescription: suggestion.shortDescription,
                 categories: suggestion.categories,
                 region: suggestion.region,
                 status: ArticleStatusEnum.Draft,
-                createdAt: serverTimestamp(),
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 sourceUrl: suggestion.sourceUrl || null,
                 sourceTitle: suggestion.sourceTitle || null,
             });
 
-            await deleteDoc(doc(db, 'suggested_topics', suggestion.id));
+            await db.collection('suggested_topics').doc(suggestion.id).delete();
 
             alert(`'${suggestion.title}' approved. The AI will now generate the full article.`);
             fetchSuggestions();
@@ -1061,7 +1036,7 @@ const TopicDiscoveryPage: React.FC = () => {
 
     const handleReject = async (suggestionId: string) => {
         try {
-            await deleteDoc(doc(db, 'suggested_topics', suggestionId));
+            await db.collection('suggested_topics').doc(suggestionId).delete();
             alert("Suggestion rejected and removed.");
             fetchSuggestions();
         } catch (error) {
@@ -1140,8 +1115,8 @@ const ExpertManagementPage: React.FC = () => {
 
     const fetchExperts = useCallback(async () => {
         setLoading(true);
-        const q = query(collection(db, 'users'), where('role', '==', 'Expert'));
-        const querySnapshot = await getDocs(q);
+        const q = db.collection('users').where('role', '==', 'Expert');
+        const querySnapshot = await q.get();
         const fetchedExperts = querySnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
         setExperts(fetchedExperts);
         setLoading(false);
@@ -1176,7 +1151,7 @@ const ExpertManagementPage: React.FC = () => {
         try {
             if (expertData.uid) {
                 const { uid, ...dataToUpdate } = expertData;
-                await updateDoc(doc(db, 'users', uid), dataToUpdate);
+                await db.collection('users').doc(uid).update(dataToUpdate);
                 alert("Expert updated successfully.");
             } else { 
                 if (!password) {
@@ -1188,9 +1163,9 @@ const ExpertManagementPage: React.FC = () => {
                 // In a real-world app, this should be a Cloud Function callable only by an Admin.
                 // The temporary app workaround is complex and can still expose config.
                 // For this project, we accept the limitation.
-                const tempApp = initializeApp(firebaseConfig, 'temp-user-creation-' + Date.now());
-                const tempAuth = getAuth(tempApp);
-                const userCredential = await createUserWithEmailAndPassword(tempAuth, expertData.email, password);
+                const tempApp = firebase.initializeApp(firebaseConfig, 'temp-user-creation-' + Date.now());
+                const tempAuth = tempApp.auth();
+                const userCredential = await tempAuth.createUserWithEmailAndPassword(expertData.email, password);
                 const newUid = userCredential.user!.uid;
                 
                 const newUserProfile = {
@@ -1202,10 +1177,10 @@ const ExpertManagementPage: React.FC = () => {
                     categories: expertData.categories || []
                 };
                 
-                await setDoc(doc(db, 'users', newUid), newUserProfile);
+                await db.collection('users').doc(newUid).set(newUserProfile);
 
-                await signOut(tempAuth);
-                await deleteApp(tempApp);
+                await tempAuth.signOut();
+                await tempApp.delete();
                 alert("Expert created successfully.");
             }
             handleModalClose();
@@ -1358,16 +1333,16 @@ const ExpertEditModal: React.FC<{ isOpen: boolean; onClose: () => void; expert: 
 };
 
 
-const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user, loading } = useAuth();
     if (loading) return <div className="h-screen w-screen flex items-center justify-center"><Spinner /></div>;
-    return user ? children : <Navigate to="/login" replace />;
+    return user ? <>{children}</> : <Redirect to="/login" />;
 };
 
-const AdminRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { userData, loading } = useAuth();
     if (loading) return <div className="h-screen w-screen flex items-center justify-center"><Spinner /></div>;
-    return userData?.role === 'Admin' ? children : <Navigate to="/dashboard" replace />;
+    return userData?.role === 'Admin' ? <>{children}</> : <Redirect to="/dashboard" />;
 };
 
 // --- Main App Component ---
@@ -1393,24 +1368,36 @@ const AppContent: React.FC = () => {
     return (
         <HashRouter>
             <main>
-                <Routes>
+                <Switch>
                     {/* Public Routes */}
-                    <Route path="/" element={<HomePage />} />
-                    <Route path="/feed" element={<ArticleFeedPage />} />
-                    <Route path="/view/:id" element={<PublicArticleView />} />
+                    <Route exact path="/" component={HomePage} />
+                    <Route path="/feed" component={ArticleFeedPage} />
+                    <Route path="/view/:id" component={PublicArticleView} />
                     
                     {/* Auth Route */}
-                    <Route path="/login" element={<LoginPage />} />
+                    <Route path="/login" component={LoginPage} />
 
                     {/* Curation Platform (Protected) Routes */}
-                    <Route path="/dashboard" element={<ProtectedRoute><><Header /><DashboardPage /></></ProtectedRoute>} />
-                    <Route path="/article/:id" element={<ProtectedRoute><><Header /><ArticleEditorPage /></></ProtectedRoute>} />
-                    <Route path="/profile" element={<ProtectedRoute><><Header /><ProfilePage /></></ProtectedRoute>} />
-                    <Route path="/experts" element={<AdminRoute><><Header /><ExpertManagementPage /></></AdminRoute>} />
-                    <Route path="/discovery" element={<AdminRoute><><Header /><TopicDiscoveryPage /></></AdminRoute>} />
+                    <Route path="/dashboard">
+                        <ProtectedRoute><Header /><DashboardPage /></ProtectedRoute>
+                    </Route>
+                     <Route path="/article/:id">
+                        <ProtectedRoute><Header /><ArticleEditorPage /></ProtectedRoute>
+                    </Route>
+                    <Route path="/profile">
+                        <ProtectedRoute><Header /><ProfilePage /></ProtectedRoute>
+                    </Route>
+                    <Route path="/experts">
+                        <AdminRoute><Header /><ExpertManagementPage /></AdminRoute>
+                    </Route>
+                    <Route path="/discovery">
+                        <AdminRoute><Header /><TopicDiscoveryPage /></AdminRoute>
+                    </Route>
                     
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
+                    <Route path="*">
+                       <Redirect to="/" />
+                    </Route>
+                </Switch>
             </main>
         </HashRouter>
     );
