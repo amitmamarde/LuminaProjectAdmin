@@ -201,7 +201,7 @@ export const discoverTopics = onSchedule({
             const sourcesInfo = groundingChunks?.map(chunk => `Title: "${chunk.web.title}", URL: "${chunk.web.uri}"`).join('\n') || 'No sources provided.';
             
             if (config.articleType === 'Positive News') {
-                jsonExtractionPrompt = `From the following text and list of sources, extract up to 5 distinct positive news stories. Format them into a JSON object matching the provided schema. Ensure the 'sourceUrl' and 'sourceTitle' fields are populated accurately from the provided sources list.
+                jsonExtractionPrompt = `From the following text and list of sources, extract up to 5 distinct positive news stories. Format them into a JSON object matching the provided schema. For each story, you MUST select the most relevant source URL and title from the 'Sources' list provided below. It is critical that you use the EXACT URL from the sources list. Do not invent, alter, or truncate the URLs. If you cannot find a direct and complete source URL for a story in the provided list, do not include that story in your output.
 Categories must be from this list: ${allCategories}.
 
 Sources:
