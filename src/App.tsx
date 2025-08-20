@@ -8,10 +8,8 @@ import {
   useNavigate,
   useParams,
 } from 'react-router-dom';
-import { initializeApp } from 'firebase/app';
-import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword, sendPasswordResetEmail, type User } from 'firebase/auth';
+import { onAuthStateChanged, signOut, signInWithEmailAndPassword, sendPasswordResetEmail, type User } from 'firebase/auth';
 import { 
-    getFirestore, 
     doc, 
     getDoc, 
     collection, 
@@ -22,13 +20,10 @@ import {
     getDocs,
     updateDoc,
     serverTimestamp,
-    addDoc,
-    deleteDoc,
     onSnapshot,
     writeBatch
 } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { httpsCallable } from 'firebase/functions';
 
 
 import ReactQuill from 'react-quill';
@@ -37,24 +32,9 @@ import DOMPurify from 'dompurify';
 import { Modal } from './components/Modal';
 import type { UserProfile, Article, ArticleStatus, ArticleType, SuggestedTopic } from './types';
 import { ArticleStatus as ArticleStatusEnum } from './types';
+import { auth, db, functions } from './firebase';
+import { saveArticle, deleteArticle } from './services/articleService';
 
-
-// --- Firebase Configuration ---
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
-};
-
-// --- Firebase Initialization (v9+) ---
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
-const functions = getFunctions(app);
 
 // --- App-wide Constants ---
 const CATEGORIES = [
@@ -859,16 +839,11 @@ const ArticleEditorPage: React.FC = () => {
             adminRevisionNotes: newStatus === ArticleStatusEnum.NeedsRevision ? adminRevisionNotes : (article.adminRevisionNotes || ''),
         };
 
-        try {
+       try {
+            const savedId = await saveArticle(id, dataToSave);
+            setArticle(prev => ({...prev, ...dataToSave}));
             if (isNewArticle) {
-                dataToSave.createdAt = serverTimestamp();
-                const docRef = await addDoc(collection(db, 'articles'), dataToSave);
-                navigate(`/edit/${docRef.id}`); // Redirect to edit page to prevent re-creation
-            } else {
-                if (!id) return;
-                const docRef = doc(db, 'articles', id);
-                await updateDoc(docRef, dataToSave);
-                setArticle(prev => ({...prev, ...dataToSave}));
+                navigate(`/edit/${savedId}`, { replace: true });
             }
         } catch (e: any) {
             setError(e.message);
@@ -896,9 +871,7 @@ const ArticleEditorPage: React.FC = () => {
                 expertShowNameToPublic: expert.showNameToPublic,
                 status: ArticleStatusEnum.AwaitingExpertReview,
             };
-            const docRef = doc(db, 'articles', id);
-            await updateDoc(docRef, dataToUpdate);
-            setArticle(prev => ({...prev, ...dataToUpdate}));
+            await saveArticle(id, dataToUpdate);
         } else if (userData.role === 'Expert') {
             const dataToUpdate = { status: ArticleStatusEnum.AwaitingAdminReview };
             const docRef = doc(db, 'articles', id);
@@ -920,9 +893,8 @@ const ArticleEditorPage: React.FC = () => {
             imageUrl,
         };
 
-        const docRef = doc(db, 'articles', id);
-        await updateDoc(docRef, dataToUpdate);
-        setArticle(prev => ({...prev, ...dataToUpdate}));
+        await saveArticle(id, dataToUpdate);
+        setArticle(prev => ({...prev, ...dataToUpdate, status: ArticleStatusEnum.Published}));
         navigate('/articles');
     };
     
@@ -955,7 +927,7 @@ const ArticleEditorPage: React.FC = () => {
         if (isNewArticle || !id) return;
         setIsDeleting(true);
         try {
-            await deleteDoc(doc(db, 'articles', id));
+            await deleteArticle(id);
             navigate('/articles');
         } catch (error: any) {
             setError(`Failed to delete: ${error.message}`);
@@ -1136,11 +1108,11 @@ const TopicDiscoveryPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
 
-    const fetchTopics = useCallback(async () => {
+    const fetchTopics = useCallback(() => {
         setLoading(true);
         const topicsRef = collection(db, 'suggested_topics');
         const q = query(topicsRef, orderBy('createdAt', 'desc'));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        return onSnapshot(q, (snapshot) => {
             const fetchedTopics = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SuggestedTopic));
             setTopics(fetchedTopics);
             setLoading(false);
@@ -1148,17 +1120,12 @@ const TopicDiscoveryPage: React.FC = () => {
             console.error("Error fetching suggested topics:", error);
             setLoading(false);
         });
-        return unsubscribe;
     }, []);
 
     useEffect(() => {
         if (userData?.role !== 'Admin') return;
         const unsubscribe = fetchTopics();
-        return () => {
-            (async () => {
-                if ((await unsubscribe)) (await unsubscribe)();
-            })();
-        }
+        return () => unsubscribe();
     }, [userData, fetchTopics]);
     
     const handleToggleSelect = (topicId: string) => {

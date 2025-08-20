@@ -126,6 +126,113 @@ export const generateArticleContent = onDocumentCreated({
     }
 });
 
+/**
+ * Processes a single discovery configuration to find and save new topic suggestions.
+ * @param {object} config The discovery configuration object.
+ * @param {GoogleGenAI} ai The GoogleGenAI instance.
+ * @param {FirebaseFirestore.Firestore} db The Firestore instance.
+ * @param {object} promptSchema The schema for the AI prompt response.
+ */
+async function processDiscoveryConfig(config, ai, db, promptSchema) {
+    console.log(`Discovering ${config.articleType} for ${config.region}...`);
+        
+    try {
+        // STEP 1: Use Google Search to get grounded, up-to-date information.
+        let searchPrompt;
+        if (config.articleType === 'Positive News') {
+            searchPrompt = `Using Google Search, find 5 recent, uplifting, and positive news stories from ${config.region}. Summarize them and include their sources.`;
+        } else { // Trending Topic
+            searchPrompt = `Using Google Search, find the top 5 trending news topics in ${config.region} right now. Summarize their significance.`;
+        }
+
+        const groundedResponse = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [{ parts: [{ text: searchPrompt }] }],
+            config: {
+                tools: [{ googleSearch: {} }],
+            },
+        });
+
+        const groundedText = groundedResponse.text;
+        const groundingChunks = groundedResponse.candidates?.[0]?.groundingMetadata?.groundingChunks;
+
+        if (!groundedText) {
+            console.log(`No grounded text returned for ${config.articleType} in ${config.region}. Skipping.`);
+            return;
+        }
+
+        // STEP 2: Use a second call to structure the grounded text into the desired JSON format.
+        let jsonExtractionPrompt;
+        const sourcesInfo = groundingChunks?.map(chunk => `Title: "${chunk.web.title}", URL: "${chunk.web.uri}"`).join('\n') || 'No sources provided.';
+        const categoriesString = "['" + SUPPORTED_CATEGORIES.join("', '") + "']";
+        
+        if (config.articleType === 'Positive News') {
+            jsonExtractionPrompt = `From the following text and list of sources, extract up to 5 distinct positive news stories. Format them into a JSON object matching the provided schema. For each story, you MUST select the most relevant source URL and title from the 'Sources' list provided below. It is critical that you use the EXACT URL from the sources list. Do not invent, alter, or truncate the URLs. If you cannot find a direct and complete source URL for a story in the provided list, do not include that story in your output.
+Categories must be from this list: ${categoriesString}.
+
+Sources:
+${sourcesInfo}
+
+Text:
+${groundedText}`;
+        } else { // Trending Topic
+            jsonExtractionPrompt = `From the following text, extract up to 5 distinct trending topics. Format them into a JSON object matching the provided schema. The 'sourceUrl' and 'sourceTitle' fields are not required and can be omitted.
+Categories must be from this list: ${categoriesString}.
+
+Text:
+${groundedText}`;
+        }
+        
+        const jsonResponse = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [{ parts: [{ text: jsonExtractionPrompt }] }],
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: promptSchema,
+            },
+        });
+
+        const jsonString = jsonResponse.text.trim();
+        const result = JSON.parse(jsonString);
+
+        if (result.suggestions && result.suggestions.length > 0) {
+            const batch = db.batch();
+            let newSuggestionCount = 0;
+ 
+            const validSuggestions = result.suggestions.filter(suggestion => 
+                suggestion.title && typeof suggestion.title === 'string' && suggestion.title.trim() !== ''
+            );
+
+            if (validSuggestions.length > 0) {
+                const titles = validSuggestions.map(s => s.title);
+                const existingTopicsQuery = db.collection('suggested_topics')
+                    .where('title', 'in', titles)
+                    .where('region', '==', config.region)
+                    .where('articleType', '==', config.articleType);
+
+                const existingTopicsSnapshot = await existingTopicsQuery.get();
+                const existingTitles = new Set(existingTopicsSnapshot.docs.map(doc => doc.data().title));
+
+                for (const suggestion of validSuggestions) {
+                    if (existingTitles.has(suggestion.title)) continue;
+
+                    const newSuggestionRef = db.collection('suggested_topics').doc();
+                    batch.set(newSuggestionRef, { ...suggestion, articleType: config.articleType, region: config.region, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+                    newSuggestionCount++;
+                }
+            }
+
+            if (newSuggestionCount > 0) {
+                await batch.commit();
+                console.log(`Added ${newSuggestionCount} new suggestions for ${config.articleType} in ${config.region}.`);
+            } else {
+                console.log(`No new, unique suggestions found for ${config.articleType} in ${config.region}.`);
+            }
+        }
+    } catch (error) {
+        console.error(`Failed to discover topics for ${config.articleType} in ${config.region}:`, error);
+    }
+}
 
 /**
  * This scheduled Cloud Function runs every 6 hours to automatically discover trending topics
@@ -177,108 +284,10 @@ export const discoverTopics = onSchedule({
         required: ["suggestions"]
     };
     
-    for (const config of discoveryConfigs) {
-        console.log(`Discovering ${config.articleType} for ${config.region}...`);
-        
-        try {
-            // STEP 1: Use Google Search to get grounded, up-to-date information.
-            // We cannot request JSON directly when using the googleSearch tool.
-            let searchPrompt;
-            if (config.articleType === 'Positive News') {
-                searchPrompt = `Using Google Search, find 5 recent, uplifting, and positive news stories from ${config.region}. Summarize them and include their sources.`;
-            } else { // Trending Topic
-                searchPrompt = `Using Google Search, find the top 5 trending news topics in ${config.region} right now. Summarize their significance.`;
-            }
+    // We can process these in parallel to speed up the discovery process.
+    const discoveryPromises = discoveryConfigs.map(config => 
+        processDiscoveryConfig(config, ai, db, promptSchema)
+    );
 
-            const groundedResponse = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: [{ parts: [{ text: searchPrompt }] }],
-                config: {
-                    tools: [{ googleSearch: {} }],
-                },
-            });
-
-            const groundedText = groundedResponse.text;
-            const groundingChunks = groundedResponse.candidates?.[0]?.groundingMetadata?.groundingChunks;
-
-            if (!groundedText) {
-                console.log(`No grounded text returned for ${config.articleType} in ${config.region}. Skipping.`);
-                continue;
-            }
-
-            // STEP 2: Use a second call to structure the grounded text into the desired JSON format.
-            let jsonExtractionPrompt;
-            const sourcesInfo = groundingChunks?.map(chunk => `Title: "${chunk.web.title}", URL: "${chunk.web.uri}"`).join('\n') || 'No sources provided.';
-            const categoriesString = "['" + SUPPORTED_CATEGORIES.join("', '") + "']";
-            
-            if (config.articleType === 'Positive News') {
-                jsonExtractionPrompt = `From the following text and list of sources, extract up to 5 distinct positive news stories. Format them into a JSON object matching the provided schema. For each story, you MUST select the most relevant source URL and title from the 'Sources' list provided below. It is critical that you use the EXACT URL from the sources list. Do not invent, alter, or truncate the URLs. If you cannot find a direct and complete source URL for a story in the provided list, do not include that story in your output.
-Categories must be from this list: ${categoriesString}.
-
-Sources:
-${sourcesInfo}
-
-Text:
-${groundedText}`;
-            } else { // Trending Topic
-                jsonExtractionPrompt = `From the following text, extract up to 5 distinct trending topics. Format them into a JSON object matching the provided schema. The 'sourceUrl' and 'sourceTitle' fields are not required and can be omitted.
-Categories must be from this list: ${categoriesString}.
-
-Text:
-${groundedText}`;
-            }
-            
-            const jsonResponse = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: [{ parts: [{ text: jsonExtractionPrompt }] }],
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: promptSchema,
-                },
-            });
-
-            const jsonString = jsonResponse.text.trim();
-            const result = JSON.parse(jsonString);
-
-            if (result.suggestions && result.suggestions.length > 0) {
-                const batch = db.batch();
-                let newSuggestionCount = 0;
-
-                for (const suggestion of result.suggestions) {
-                    // Sanity check for suggestion title
-                    if (!suggestion.title || typeof suggestion.title !== 'string' || suggestion.title.trim() === '') {
-                        console.warn('Skipping suggestion with invalid title:', suggestion);
-                        continue;
-                    }
-                
-                    const existingQuery = db.collection('suggested_topics')
-                        .where('title', '==', suggestion.title)
-                        .where('region', '==', config.region)
-                        .where('articleType', '==', config.articleType)
-                        .limit(1);
-
-                    const existingSnapshot = await existingQuery.get();
-                    
-                    if (existingSnapshot.empty) {
-                        const newSuggestionRef = db.collection('suggested_topics').doc();
-                        batch.set(newSuggestionRef, {
-                            ...suggestion,
-                            articleType: config.articleType,
-                            region: config.region,
-                            createdAt: admin.firestore.FieldValue.serverTimestamp()
-                        });
-                        newSuggestionCount++;
-                    }
-                }
-                if (newSuggestionCount > 0) {
-                    await batch.commit();
-                    console.log(`Added ${newSuggestionCount} new suggestions for ${config.articleType} in ${config.region}.`);
-                } else {
-                    console.log(`No new, unique suggestions found for ${config.articleType} in ${config.region}.`);
-                }
-            }
-        } catch (error) {
-            console.error(`Failed to discover topics for ${config.articleType} in ${config.region}:`, error);
-        }
-    }
+    await Promise.all(discoveryPromises);
 });
