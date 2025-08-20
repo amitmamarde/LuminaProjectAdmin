@@ -1,50 +1,54 @@
-# General project files to ignore
+# Miscellaneous
 .DS_Store
 *.log
-*.swo
-.idea/
-.vscode/
 
 # Environment variables
-# Never commit .env files with secrets!
-.env
-.env.*
-!/.env.example
+.env*
 
-# --- Root Vite/React Project ---
-/node_modules
-/dist
-/coverage
-.vite/
-*.tsbuildinfo
-.eslintcache
-
-# --- Firebase ---
-# Ignore firebase emulators data
+# Firebase
 .firebase/
-# Ignore Netlify build output if you have a netlify.toml
-.netlify
+firebase-debug.log
 
-# --- Firebase Functions Project (`/functions`) ---
-/functions/node_modules
-/functions/lib
-/functions/.runtimeconfig.json
+## Sensitive configuration files that should not be committed.
+# These contain API keys and other sensitive project information.
+#
+# Flutter
+consumer_app/lib/firebase_options.dart
+consumer_app/android/app/google-services.json
+# It's also good practice to ignore the iOS equivalent if you add it later.
+consumer_app/ios/Runner/GoogleService-Info.plist
 
-# --- Flutter Project (`/consumer_app`) ---
-# Flutter/Dart specific
-/consumer_app/.dart_tool/
-/consumer_app/.packages
-/consumer_app/build/
-/consumer_app/pubspec.lock
+# Firebase Functions
+functions/.runtimeconfig.json
 
-# Generated files
-/consumer_app/**/*.g.dart
-/consumer_app/**/*.freezed.dart
 
-# Platform-specific build files and artifacts
-/consumer_app/ios/Pods/
-/consumer_app/ios/Flutter/
-/consumer_app/macos/Flutter/ephemeral/
-/consumer_app/macos/Pods/
-/consumer_app/windows/flutter/ephemeral/
-/consumer_app/linux/flutter/ephemeral/
+# Flutter
+# See https://flutter.dev/docs/development/tools/version-control
+
+# General
+build/
+.metadata
+.packages
+.dart_tool/
+
+# IDE-specific
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# Android
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+
+# iOS
+ios/build/
+ios/Pods/
+ios/Podfile.lock
+ios/.symlinks/
+ios/Runner/GeneratedPluginRegistrant.*
+
+# Firebase Functions
+functions/node_modules/
