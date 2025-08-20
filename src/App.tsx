@@ -883,14 +883,17 @@ const ArticleEditorPage: React.FC = () => {
 
     const handlePublish = async () => {
         if (userData?.role !== 'Admin' || !id) return;
-        
-        const imageUrl = article.imageUrl || await generateAndUploadImage();
-        if(!imageUrl) return;
+
+        // --- IMAGE GENERATION SKIPPED ---
+        // As requested, we are skipping the image generation step for now.
+        // The article will be published without an image.
+        // const imageUrl = article.imageUrl || await generateAndUploadImage();
+        // if(!imageUrl) return;
 
         const dataToUpdate = {
             status: ArticleStatusEnum.Published,
             publishedAt: serverTimestamp(),
-            imageUrl,
+            // imageUrl, // This is commented out to skip adding an image.
         };
 
         await saveArticle(id, dataToUpdate);
@@ -1107,6 +1110,9 @@ const TopicDiscoveryPage: React.FC = () => {
     const [topics, setTopics] = useState<SuggestedTopic[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
+    const [filterType, setFilterType] = useState('all');
+    const [filterRegion, setFilterRegion] = useState('all');
+    const [filterCategory, setFilterCategory] = useState('all');
 
     const fetchTopics = useCallback(() => {
         setLoading(true);
@@ -1127,11 +1133,51 @@ const TopicDiscoveryPage: React.FC = () => {
         const unsubscribe = fetchTopics();
         return () => unsubscribe();
     }, [userData, fetchTopics]);
+
+    const filteredAndSortedTopics = useMemo(() => {
+        return topics
+            .filter(topic => {
+                const typeMatch = filterType === 'all' || topic.articleType === filterType;
+                const regionMatch = filterRegion === 'all' || topic.region === filterRegion;
+                const categoryMatch = filterCategory === 'all' || (topic.categories || []).includes(filterCategory);
+                return typeMatch && regionMatch && categoryMatch;
+            })
+            .sort((a, b) => {
+                // Primary sort: createdAt descending
+                const dateA = a.createdAt?.toDate()?.getTime() || 0;
+                const dateB = b.createdAt?.toDate()?.getTime() || 0;
+                if (dateB !== dateA) return dateB - dateA;
+
+                // Secondary sort: articleType
+                if (a.articleType < b.articleType) return -1;
+                if (a.articleType > b.articleType) return 1;
+
+                // Tertiary sort: region
+                if (a.region < b.region) return -1;
+                if (a.region > b.region) return 1;
+
+                return 0;
+            });
+    }, [topics, filterType, filterRegion, filterCategory]);
+
+    const areAllFilteredSelected = useMemo(() => {
+        const filteredIds = new Set(filteredAndSortedTopics.map(t => t.id));
+        if (filteredIds.size === 0) return false;
+        return Array.from(filteredIds).every(id => selectedTopics.includes(id));
+    }, [filteredAndSortedTopics, selectedTopics]);
     
     const handleToggleSelect = (topicId: string) => {
         setSelectedTopics(prev => 
             prev.includes(topicId) ? prev.filter(id => id !== topicId) : [...prev, topicId]
         );
+    };
+
+    const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.checked) {
+            setSelectedTopics(filteredAndSortedTopics.map(t => t.id));
+        } else {
+            setSelectedTopics([]);
+        }
     };
 
     const handleCreateArticles = async () => {
@@ -1143,7 +1189,7 @@ const TopicDiscoveryPage: React.FC = () => {
         // Create new articles
         topicsToCreate.forEach(topic => {
             const newArticleRef = doc(collection(db, 'articles'));
-            const articleData: Partial<Article> = {
+            const articleData: Partial<Article> & { discoveredAt?: any } = {
                 title: topic.title,
                 articleType: topic.articleType,
                 categories: topic.categories,
@@ -1151,6 +1197,7 @@ const TopicDiscoveryPage: React.FC = () => {
                 shortDescription: topic.shortDescription,
                 status: ArticleStatusEnum.Draft,
                 createdAt: serverTimestamp(),
+                discoveredAt: topic.createdAt, // This preserves the discovery date
                 sourceUrl: topic.sourceUrl,
                 sourceTitle: topic.sourceTitle,
             };
@@ -1195,17 +1242,52 @@ const TopicDiscoveryPage: React.FC = () => {
                     </div>
                 </div>
 
+                <div className="bg-brand-surface p-4 rounded-lg shadow-md mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-brand-text-secondary mb-1">Filter by Type</label>
+                            <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-primary">
+                                <option value="all">All Types</option>
+                                <option value="Trending Topic">Trending Topic</option>
+                                <option value="Positive News">Positive News</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-brand-text-secondary mb-1">Filter by Region</label>
+                            <select value={filterRegion} onChange={e => setFilterRegion(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-primary">
+                                <option value="all">All Regions</option>
+                                {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-brand-text-secondary mb-1">Filter by Category</label>
+                            <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-primary">
+                                <option value="all">All Categories</option>
+                                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
                 {loading ? <Spinner /> : (
                     <div className="bg-brand-surface shadow-md rounded-lg overflow-hidden">
-                        <div className="grid grid-cols-[auto,1fr,1fr,1fr,auto] gap-x-4 p-4 bg-gray-50 border-b font-semibold text-sm">
-                            <div></div>
+                        <div className="grid grid-cols-[auto,1fr,1fr,1fr,1fr,auto] gap-x-4 p-4 bg-gray-50 border-b font-semibold text-sm items-center">
+                            <input
+                                type="checkbox"
+                                onChange={handleSelectAll}
+                                checked={areAllFilteredSelected}
+                                disabled={filteredAndSortedTopics.length === 0}
+                                title="Select all filtered topics"
+                                className="h-4 w-4 text-brand-primary focus:ring-brand-primary border-gray-300 rounded"
+                            />
                             <div>Title</div>
                             <div>Type / Region</div>
                             <div>Categories</div>
+                            <div>Discovered On</div>
                             <div>Source</div>
                         </div>
-                        {topics.map(topic => (
-                            <div key={topic.id} className={`grid grid-cols-[auto,1fr,1fr,1fr,auto] gap-x-4 p-4 border-b last:border-b-0 items-start ${selectedTopics.includes(topic.id) ? 'bg-indigo-50' : ''}`}>
+                        {filteredAndSortedTopics.map(topic => (
+                            <div key={topic.id} className={`grid grid-cols-[auto,1fr,1fr,1fr,1fr,auto] gap-x-4 p-4 border-b last:border-b-0 items-start ${selectedTopics.includes(topic.id) ? 'bg-indigo-50' : ''}`}>
                                 <input type="checkbox" checked={selectedTopics.includes(topic.id)} onChange={() => handleToggleSelect(topic.id)} className="mt-1"/>
                                 <div>
                                     <p className="font-bold">{topic.title}</p>
@@ -1215,7 +1297,10 @@ const TopicDiscoveryPage: React.FC = () => {
                                     <p>{topic.articleType}</p>
                                     <p className="text-gray-500">{topic.region}</p>
                                 </div>
-                                <div className="text-sm text-gray-700">{topic.categories.join(', ')}</div>
+                                <div className="text-sm text-gray-700">{(topic.categories || []).join(', ')}</div>
+                                <div className="text-sm text-gray-500">
+                                    {topic.createdAt?.toDate().toLocaleDateString()}
+                                </div>
                                 <div className="text-sm">
                                     {topic.sourceUrl && (
                                         <a href={topic.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-brand-primary hover:underline">
@@ -1225,6 +1310,11 @@ const TopicDiscoveryPage: React.FC = () => {
                                 </div>
                             </div>
                         ))}
+                        {filteredAndSortedTopics.length === 0 && (
+                            <div className="p-6 text-center text-gray-500">
+                                No topics match the current filters.
+                            </div>
+                        )}
                     </div>
                 )}
             </main>

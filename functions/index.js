@@ -1,6 +1,7 @@
 // This file uses the modern ES Module syntax and the v2 Cloud Functions API for a successful deployment.
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
 import admin from "firebase-admin";
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -290,4 +291,47 @@ export const discoverTopics = onSchedule({
     );
 
     await Promise.all(discoveryPromises);
+});
+
+/**
+ * Generates an image using an external API and returns its URL.
+ * This is a callable function, which handles CORS automatically for allowed origins.
+ * NOTE: This is a placeholder implementation. You will need to replace the
+ * placeholder logic with a real call to an image generation service (like
+ * Gemini, DALL-E, etc.) and upload the result to Firebase Storage.
+ */
+export const generateImage = onCall({
+  // Note: Your other functions are in europe-west1. The error showed us-central1.
+  // Ensure you use the region that is geographically closer to your users.
+  region: "europe-west1",
+  secrets: ["GEMINI_API_KEY"], // Add any other secrets if needed
+  // This is the crucial part that fixes the CORS error.
+  // It allows your Netlify app and local development server to call the function.
+  cors: [/luminaprojectadmin\.netlify\.app$/, "http://localhost:5173"],
+}, async (request) => {
+    // 1. Check authentication
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+    }
+
+    const { prompt } = request.data;
+    if (!prompt || typeof prompt !== 'string') {
+        throw new HttpsError('invalid-argument', 'The function must be called with a "prompt" argument.');
+    }
+
+    console.log(`Generating image for prompt: "${prompt}"`);
+
+    try {
+        // --- Placeholder for actual image generation logic ---
+        // Replace this with your actual image generation and upload logic.
+        // This example returns a placeholder image from picsum.photos.
+        const imageUrl = `https://picsum.photos/seed/${encodeURIComponent(prompt)}/1024/768`;
+        console.log(`Successfully "generated" image: ${imageUrl}`);
+        
+        return { success: true, imageUrl: imageUrl };
+
+    } catch (error) {
+        console.error("Error during image generation:", error);
+        throw new HttpsError('internal', 'Failed to generate image.', error.message);
+    }
 });
