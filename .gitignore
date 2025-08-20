@@ -1,0 +1,50 @@
+# General project files to ignore
+.DS_Store
+*.log
+*.swo
+.idea/
+.vscode/
+
+# Environment variables
+# Never commit .env files with secrets!
+.env
+.env.*
+!/.env.example
+
+# --- Root Vite/React Project ---
+/node_modules
+/dist
+/coverage
+.vite/
+*.tsbuildinfo
+.eslintcache
+
+# --- Firebase ---
+# Ignore firebase emulators data
+.firebase/
+# Ignore Netlify build output if you have a netlify.toml
+.netlify
+
+# --- Firebase Functions Project (`/functions`) ---
+/functions/node_modules
+/functions/lib
+/functions/.runtimeconfig.json
+
+# --- Flutter Project (`/consumer_app`) ---
+# Flutter/Dart specific
+/consumer_app/.dart_tool/
+/consumer_app/.packages
+/consumer_app/build/
+/consumer_app/pubspec.lock
+
+# Generated files
+/consumer_app/**/*.g.dart
+/consumer_app/**/*.freezed.dart
+
+# Platform-specific build files and artifacts
+/consumer_app/ios/Pods/
+/consumer_app/ios/Flutter/
+/consumer_app/macos/Flutter/ephemeral/
+/consumer_app/macos/Pods/
+/consumer_app/windows/flutter/ephemeral/
+/consumer_app/linux/flutter/ephemeral/
