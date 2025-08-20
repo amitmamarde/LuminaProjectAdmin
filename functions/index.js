@@ -4,9 +4,21 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import admin from "firebase-admin";
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Initialize Firebase Admin SDK to interact with Firestore
+//  Initialize Firebase Admin SDK to interact with Firestore
 admin.initializeApp();
 const db = admin.firestore();
+
+// A centralized list of categories makes it easier to manage and reuse.
+const SUPPORTED_CATEGORIES = [
+    'Science & Technology', 
+    'Health & Wellness', 
+    'History & Culture', 
+    'Politics & Society', 
+    'Digital & Media Literacy', 
+    'Business & Finance', 
+    'Environment & Sustainability', 
+    'Education & Learning', 
+    'Arts, Media & Creativity'];
 
 /**
  * This Cloud Function automatically triggers when a new document is created in the 'articles' collection.
@@ -165,8 +177,6 @@ export const discoverTopics = onSchedule({
         required: ["suggestions"]
     };
     
-    const allCategories = "['Science & Technology', 'Health & Wellness', 'History & Culture', 'Politics & Society', 'Digital & Media Literacy', 'Business & Finance', 'Environment & Sustainability', 'Education & Learning', 'Arts, Media & Creativity']";
-
     for (const config of discoveryConfigs) {
         console.log(`Discovering ${config.articleType} for ${config.region}...`);
         
@@ -199,10 +209,11 @@ export const discoverTopics = onSchedule({
             // STEP 2: Use a second call to structure the grounded text into the desired JSON format.
             let jsonExtractionPrompt;
             const sourcesInfo = groundingChunks?.map(chunk => `Title: "${chunk.web.title}", URL: "${chunk.web.uri}"`).join('\n') || 'No sources provided.';
+            const categoriesString = "['" + SUPPORTED_CATEGORIES.join("', '") + "']";
             
             if (config.articleType === 'Positive News') {
                 jsonExtractionPrompt = `From the following text and list of sources, extract up to 5 distinct positive news stories. Format them into a JSON object matching the provided schema. For each story, you MUST select the most relevant source URL and title from the 'Sources' list provided below. It is critical that you use the EXACT URL from the sources list. Do not invent, alter, or truncate the URLs. If you cannot find a direct and complete source URL for a story in the provided list, do not include that story in your output.
-Categories must be from this list: ${allCategories}.
+Categories must be from this list: ${categoriesString}.
 
 Sources:
 ${sourcesInfo}
@@ -211,7 +222,7 @@ Text:
 ${groundedText}`;
             } else { // Trending Topic
                 jsonExtractionPrompt = `From the following text, extract up to 5 distinct trending topics. Format them into a JSON object matching the provided schema. The 'sourceUrl' and 'sourceTitle' fields are not required and can be omitted.
-Categories must be from this list: ${allCategories}.
+Categories must be from this list: ${categoriesString}.
 
 Text:
 ${groundedText}`;

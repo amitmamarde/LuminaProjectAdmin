@@ -97,6 +97,26 @@ This function acts as an automated content scout, finding new potential article 
     npm run dev
     ```
 
+### Running the Consumer App (Flutter) Locally
+
+1.  **Navigate to the app directory:**
+    ```bash
+    cd consumer_app
+    ```
+2.  **Install Dependencies:**
+    ```bash
+    flutter pub get
+    ```
+3.  **Configure Firebase:**
+    -   Ensure you have the `google-services.json` file in `consumer_app/android/app/`.
+    -   Ensure you have the `firebase_options.dart` file in `consumer_app/lib/`.
+    -   If these files are missing, you can generate them by running `flutterfire configure` from within the `consumer_app` directory.
+4.  **Run the App:**
+    Connect a device or start an emulator, then run:
+    ```bash
+    flutter run
+    ```
+
 ### Deploying the Backend Functions
 
 1.  **Log in to Firebase:**

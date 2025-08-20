@@ -1,5 +1,9 @@
 # Miscellaneous
 .DS_Store
+
+# Dependency directories
+node_modules/
+functions/node_modules/
 *.log
 
 # Environment variables
@@ -28,6 +32,10 @@ functions/.runtimeconfig.json
 # General
 build/
 .metadata
+# Vite build output
+dist/
+# Vite cache
+.vite/
 .packages
 .dart_tool/
 
@@ -50,5 +58,6 @@ ios/Podfile.lock
 ios/.symlinks/
 ios/Runner/GeneratedPluginRegistrant.*
 
-# Firebase Functions
-functions/node_modules/
+# Flutter (macOS and iOS)
+**/Flutter/ephemeral/flutter_export_environment.sh
+**/Flutter/flutter_export_environment.sh
