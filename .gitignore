@@ -61,3 +61,7 @@ ios/Runner/GeneratedPluginRegistrant.*
 # Flutter (macOS and iOS)
 **/Flutter/ephemeral/flutter_export_environment.sh
 **/Flutter/flutter_export_environment.sh
+
+# Ignore the entire generated Flutter directory for iOS/macOS
+consumer_app/ios/Flutter/
+consumer_app/macos/Flutter/
