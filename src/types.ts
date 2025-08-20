@@ -34,6 +34,7 @@ export interface Article {
   status: ArticleStatus;
   createdAt: Timestamp;
   publishedAt?: Timestamp;
+  discoveredAt?: Timestamp;
   expertId?: string;
   expertDisplayName?: string;
   expertShowNameToPublic?: boolean;

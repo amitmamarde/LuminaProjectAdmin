@@ -22,44 +22,17 @@ const SUPPORTED_CATEGORIES = [
     'Arts, Media & Creativity'];
 
 /**
- * This Cloud Function automatically triggers when a new document is created in the 'articles' collection.
- * It generates the main content for the article using the Gemini API.
+ * Core logic for generating article content using the Gemini API.
+ * This function is designed to be called by other Cloud Functions.
+ * @param {string} articleId The ID of the article document.
+ * @param {object} data The data of the article.
+ * @param {string} geminiApiKey The Gemini API key.
  */
-export const generateArticleContent = onDocumentCreated({
-  document: "articles/{articleId}",
-  region: "europe-west1",
-  secrets: ["GEMINI_API_KEY"],
-}, async (event) => {
-    const articleId = event.params.articleId;
-    const snapshot = event.data;
-
-    if (!snapshot) {
-      console.log(`[${articleId}] Event is missing data snapshot. Exiting.`);
-      return;
-    }
-    
-    const geminiApiKey = process.env.GEMINI_API_KEY;
-
-    if (!geminiApiKey) {
-      console.error(`[${articleId}] Gemini API key is not configured in secrets. Please run 'firebase functions:secrets:set GEMINI_API_KEY' and redeploy.`);
-      const articleRef = db.collection('articles').doc(articleId);
-      await articleRef.update({
-        status: 'NeedsRevision',
-        adminRevisionNotes: 'AI configuration error: The Gemini API key is missing. Please contact an administrator.'
-      });
-      return;
-    }
+async function performContentGeneration(articleId, data, geminiApiKey) {
+    console.log(`[${articleId}] Starting content generation for: "${data.title}"`);
     
     const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-    const data = snapshot.data();
-    
-    if (!data || data.status !== 'Draft') {
-      console.log(`[${articleId}] Ignoring article with status '${data?.status}'.`);
-      return;
-    }
-    
     const { title, categories, shortDescription, articleType } = data;
-    console.log(`[${articleId}] Processing new draft: "${title}" of type "${articleType}"`);
 
     try {
       console.log(`[${articleId}] Calling Gemini API for text content.`);
@@ -113,6 +86,8 @@ export const generateArticleContent = onDocumentCreated({
         deepDiveContent: generatedText.deepDiveContent,
         imagePrompt: generatedText.imagePrompt,
         status: nextStatus,
+        // Clear any previous revision notes upon successful regeneration
+        adminRevisionNotes: admin.firestore.FieldValue.delete(),
       });
 
       console.log(`[${articleId}] Process complete! Article is now in status '${nextStatus}'.`);
@@ -120,10 +95,109 @@ export const generateArticleContent = onDocumentCreated({
     } catch (error) {
       console.error(`[${articleId}] An error occurred during content generation:`, error);
       const articleRef = db.collection('articles').doc(articleId);
+      // Use a more specific error message if available, otherwise a generic one.
+      const errorMessage = error.message || 'An unknown error occurred.';
       await articleRef.update({
         status: 'NeedsRevision',
-        adminRevisionNotes: `AI content generation failed. Error: ${error.message}. Please review the draft, create content manually, or delete and recreate the draft.`
+        adminRevisionNotes: `AI content generation failed. Error: ${errorMessage}. Please review the draft, create content manually, or delete and recreate the draft.`
       });
+      // Re-throw the error so the calling function knows it failed.
+      throw error;
+    }
+}
+
+/**
+ * This Cloud Function automatically triggers when a new document is created in the 'articles' collection.
+ * It generates the main content for the article using the Gemini API.
+ */
+export const generateArticleContent = onDocumentCreated({
+  document: "articles/{articleId}",
+  region: "europe-west1",
+  secrets: ["GEMINI_API_KEY"],
+  // This is the key change. It ensures that a maximum of 10 instances of this
+  // function will run at once, throttling the calls to the Gemini API to
+  // stay within the free tier's rate limit (10 RPM).
+  concurrency: 10,
+}, async (event) => {
+    const articleId = event.params.articleId;
+    const snapshot = event.data;
+
+    if (!snapshot) {
+      console.log(`[${articleId}] Event is missing data snapshot. Exiting.`);
+      return;
+    }
+    
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+
+    if (!geminiApiKey) {
+      console.error(`[${articleId}] Gemini API key is not configured in secrets. Please run 'firebase functions:secrets:set GEMINI_API_KEY' and redeploy.`);
+      const articleRef = db.collection('articles').doc(articleId);
+      await articleRef.update({
+        status: 'NeedsRevision',
+        adminRevisionNotes: 'AI configuration error: The Gemini API key is missing. Please contact an administrator.'
+      });
+      return;
+    }
+    
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+    const data = snapshot.data();
+    
+    if (!data || data.status !== 'Draft') {
+      console.log(`[${articleId}] Ignoring article with status '${data?.status}'.`);
+      return;
+    }
+    
+    const { title, categories, shortDescription, articleType } = data;
+    console.log(`[${articleId}] Processing new draft: "${title}" of type "${articleType}"`);
+    
+    try {
+      await performContentGeneration(articleId, data, geminiApiKey);
+    } catch (error) {
+      // The helper function already updated the document with an error state.
+      // We just log that the process concluded with a failure.
+      console.error(`[${articleId}] Generation process failed. The document has been updated with error details.`);
+    }
+});
+
+/**
+ * A callable function that allows an Admin to manually trigger content regeneration
+ * for an article, typically one that previously failed.
+ */
+export const regenerateArticleContent = onCall({
+  region: "europe-west1",
+  secrets: ["GEMINI_API_KEY"],
+  cors: [/luminaprojectadmin\.netlify\.app$/, "http://localhost:5173"],
+}, async (request) => {
+    // 1. Check authentication and authorization
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+    }
+    const userDoc = await db.collection('users').doc(request.auth.uid).get();
+    if (!userDoc.exists || userDoc.data().role !== 'Admin') {
+        throw new HttpsError('permission-denied', 'Only admins can regenerate article content.');
+    }
+
+    // 2. Validate input
+    const { articleId } = request.data;
+    if (!articleId || typeof articleId !== 'string') {
+        throw new HttpsError('invalid-argument', 'The function must be called with an "articleId" argument.');
+    }
+
+    // 3. Fetch article data
+    const articleRef = db.collection('articles').doc(articleId);
+    const articleDoc = await articleRef.get();
+    if (!articleDoc.exists) {
+        throw new HttpsError('not-found', `Article with ID ${articleId} not found.`);
+    }
+
+    // 4. Call the core generation logic
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    try {
+        await performContentGeneration(articleId, articleDoc.data(), geminiApiKey);
+        return { success: true, message: `Successfully regenerated content for ${articleId}.` };
+    } catch (error) {
+        // The helper function handles updating the doc, so we just throw the appropriate HttpsError.
+        throw new HttpsError('internal', `Content generation failed for ${articleId}. See article for details.`, { originalError: error.message });
     }
 });
 

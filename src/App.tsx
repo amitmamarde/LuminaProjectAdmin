@@ -590,23 +590,36 @@ const ArticleListPage: React.FC = () => {
     const { userData } = useAuth();
     const [articles, setArticles] = useState<Article[]>([]);
     const [loading, setLoading] = useState(true);
+    const [filterStatus, setFilterStatus] = useState('all');
+    const [filterType, setFilterType] = useState('all');
 
     useEffect(() => {
         if (!userData || userData.role !== 'Admin') return;
-        const fetchArticles = async () => {
-            setLoading(true);
-            const articlesRef = collection(db, 'articles');
-            const q = query(articlesRef, orderBy('createdAt', 'desc'));
-            const querySnapshot = await getDocs(q);
+        setLoading(true);
+        const articlesRef = collection(db, 'articles');
+        const q = query(articlesRef, orderBy('createdAt', 'desc'));
+        
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
             setArticles(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Article)));
             setLoading(false);
-        };
-        fetchArticles();
+        }, (error) => {
+            console.error("Error fetching articles:", error);
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
     }, [userData]);
+
+    const filteredArticles = useMemo(() => {
+        return articles.filter(article => {
+            const statusMatch = filterStatus === 'all' || article.status === filterStatus;
+            const typeMatch = filterType === 'all' || article.articleType === filterType;
+            return statusMatch && typeMatch;
+        });
+    }, [articles, filterStatus, filterType]);
 
     if (!userData) return <Navigate to="/login" />;
     if (userData.role !== 'Admin') return <div className="text-center py-10">Access Denied</div>;
-    if (loading) return <Spinner />;
     
     return (
         <div className="bg-brand-background min-h-screen">
@@ -618,35 +631,63 @@ const ArticleListPage: React.FC = () => {
                         Create New Article
                     </Link>
                 </div>
-                <div className="bg-brand-surface shadow-md rounded-lg overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                                <th scope="col" className="relative px-6 py-3"><span className="sr-only">Edit</span></th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {articles.map(article => (
-                                <tr key={article.id}>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="text-sm font-medium text-gray-900">{article.title}</div>
-                                        <div className="text-sm text-gray-500">{article.categories.join(', ')}</div>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{article.articleType}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap"><Badge status={article.status} /></td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{article.createdAt.toDate().toLocaleDateString()}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        <Link to={`/edit/${article.id}`} className="text-brand-primary hover:text-indigo-900">Edit</Link>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+
+                <div className="bg-brand-surface p-4 rounded-lg shadow-md mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-brand-text-secondary mb-1">Filter by Status</label>
+                            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-primary">
+                                <option value="all">All Statuses</option>
+                                {Object.values(ArticleStatusEnum).map(s => <option key={s} value={s}>{s.replace(/([A-Z])/g, ' $1').trim()}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-brand-text-secondary mb-1">Filter by Type</label>
+                            <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-primary">
+                                <option value="all">All Types</option>
+                                <option value="Trending Topic">Trending Topic</option>
+                                <option value="Positive News">Positive News</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
+
+                {loading ? <Spinner /> : (
+                    <div className="bg-brand-surface shadow-md rounded-lg overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                                    <th scope="col" className="relative px-6 py-3"><span className="sr-only">Edit</span></th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {filteredArticles.map(article => (
+                                    <tr key={article.id}>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="text-sm font-medium text-gray-900">{article.title}</div>
+                                            <div className="text-sm text-gray-500">{article.categories.join(', ')}</div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{article.articleType}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap"><Badge status={article.status} /></td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{article.createdAt.toDate().toLocaleDateString()}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            <Link to={`/edit/${article.id}`} className="text-brand-primary hover:text-indigo-900">Edit</Link>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {filteredArticles.length === 0 && (
+                                    <tr>
+                                        <td colSpan={5} className="text-center py-10 text-gray-500">No articles match the current filters.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </main>
         </div>
     );
@@ -656,6 +697,7 @@ const TaskListPage: React.FC<{ mode: 'my-tasks' | 'admin-review' }> = ({ mode })
     const { userData } = useAuth();
     const [tasks, setTasks] = useState<Article[]>([]);
     const [loading, setLoading] = useState(true);
+    const [filterType, setFilterType] = useState('all');
 
     const pageTitle = mode === 'my-tasks' ? 'My Work Queue' : 'Admin Review Queue';
     const noTasksMessage = mode === 'my-tasks' ? 'You have no assigned tasks.' : 'There are no articles awaiting admin review.';
@@ -700,6 +742,12 @@ const TaskListPage: React.FC<{ mode: 'my-tasks' | 'admin-review' }> = ({ mode })
         return () => unsubscribe();
     }, [userData, mode]);
 
+    const filteredTasks = useMemo(() => {
+        return tasks.filter(task => {
+            return filterType === 'all' || task.articleType === filterType;
+        });
+    }, [tasks, filterType]);
+
     if (loading) return <Spinner />;
 
     return (
@@ -707,7 +755,21 @@ const TaskListPage: React.FC<{ mode: 'my-tasks' | 'admin-review' }> = ({ mode })
             <Header />
             <main className="container mx-auto p-6">
                  <h1 className="text-3xl font-bold text-brand-text-primary mb-6">{pageTitle}</h1>
-                 {tasks.length > 0 ? (
+
+                <div className="bg-brand-surface p-4 rounded-lg shadow-md mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-brand-text-secondary mb-1">Filter by Type</label>
+                            <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-primary">
+                                <option value="all">All Types</option>
+                                <option value="Trending Topic">Trending Topic</option>
+                                <option value="Positive News">Positive News</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                 {filteredTasks.length > 0 ? (
                     <div className="bg-brand-surface shadow-md rounded-lg overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200">
                            <thead className="bg-gray-50">
@@ -720,7 +782,7 @@ const TaskListPage: React.FC<{ mode: 'my-tasks' | 'admin-review' }> = ({ mode })
                                 </tr>
                             </thead>
                              <tbody className="bg-white divide-y divide-gray-200">
-                                {tasks.map(task => (
+                                {filteredTasks.map(task => (
                                     <tr key={task.id}>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="text-sm font-medium text-gray-900">{task.title}</div>
@@ -739,7 +801,7 @@ const TaskListPage: React.FC<{ mode: 'my-tasks' | 'admin-review' }> = ({ mode })
                     </div>
                  ) : (
                     <div className="text-center py-10 bg-brand-surface rounded-lg shadow-md">
-                        <p className="text-brand-text-secondary">{noTasksMessage}</p>
+                        <p className="text-brand-text-secondary">{tasks.length === 0 ? noTasksMessage : 'No tasks match the current filters.'}</p>
                     </div>
                  )}
             </main>
@@ -768,7 +830,9 @@ const ArticleEditorPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isRegenerating, setIsRegenerating] = useState(false);
     const [error, setError] = useState('');
+    const [successMessage, setSuccessMessage] = useState('');
     const [experts, setExperts] = useState<UserProfile[]>([]);
     const [selectedExpertId, setSelectedExpertId] = useState('');
     const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -786,6 +850,26 @@ const ArticleEditorPage: React.FC = () => {
         ],
     }), []);
 
+    const fetchArticle = useCallback(async () => {
+        if (!id) return;
+        setLoading(true);
+        const docRef = doc(db, 'articles', id);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+            const fetchedArticle = { id: docSnap.id, ...docSnap.data() } as Article;
+            setArticle(fetchedArticle);
+            setDeepDiveContent(fetchedArticle.deepDiveContent || '');
+            setFlashContent(fetchedArticle.flashContent || '');
+            setImagePrompt(fetchedArticle.imagePrompt || '');
+            setAdminRevisionNotes(fetchedArticle.adminRevisionNotes || '');
+            setSelectedExpertId(fetchedArticle.expertId || '');
+        } else {
+            setError('Article not found.');
+        }
+        setLoading(false);
+    }, [id]);
+
     useEffect(() => {
         if (userData?.role === 'Admin') {
             const fetchExperts = async () => {
@@ -802,28 +886,13 @@ const ArticleEditorPage: React.FC = () => {
             setLoading(false);
             return;
         }
-
-        const fetchArticle = async () => {
-            if (!id) return;
-            setLoading(true);
-            const docRef = doc(db, 'articles', id);
-            const docSnap = await getDoc(docRef);
-
-            if (docSnap.exists()) {
-                const fetchedArticle = { id: docSnap.id, ...docSnap.data() } as Article;
-                setArticle(fetchedArticle);
-                setDeepDiveContent(fetchedArticle.deepDiveContent || '');
-                setFlashContent(fetchedArticle.flashContent || '');
-                setImagePrompt(fetchedArticle.imagePrompt || '');
-                setAdminRevisionNotes(fetchedArticle.adminRevisionNotes || '');
-                setSelectedExpertId(fetchedArticle.expertId || '');
-            } else {
-                setError('Article not found.');
-            }
-            setLoading(false);
-        };
         fetchArticle();
-    }, [id, isNewArticle]);
+    }, [id, isNewArticle, fetchArticle]);
+
+    const showSuccessMessage = (message: string) => {
+        setSuccessMessage(message);
+        setTimeout(() => setSuccessMessage(''), 4000);
+    };
 
     const handleSave = async (newStatus?: ArticleStatus) => {
         if (!userData) return;
@@ -845,6 +914,7 @@ const ArticleEditorPage: React.FC = () => {
             if (isNewArticle) {
                 navigate(`/edit/${savedId}`, { replace: true });
             }
+            showSuccessMessage('Changes saved successfully!');
         } catch (e: any) {
             setError(e.message);
         } finally {
@@ -926,6 +996,27 @@ const ArticleEditorPage: React.FC = () => {
         }
     };
 
+    const handleRegenerate = async () => {
+        if (!id || userData?.role !== 'Admin') return;
+        setIsRegenerating(true);
+        setError('');
+        setSuccessMessage('');
+
+        try {
+            const regenerateFunction = httpsCallable(functions, 'regenerateArticleContent');
+            await regenerateFunction({ articleId: id });
+            showSuccessMessage('Regeneration complete! Fetching updated content...');
+            // Wait a moment for the backend changes to propagate before refetching
+            setTimeout(() => {
+                fetchArticle();
+            }, 2000);
+        } catch (e: any) {
+            setError(`Regeneration failed: ${e.message}`);
+        } finally {
+            setIsRegenerating(false);
+        }
+    };
+
     const handleDelete = async () => {
         if (isNewArticle || !id) return;
         setIsDeleting(true);
@@ -947,7 +1038,7 @@ const ArticleEditorPage: React.FC = () => {
     };
     
     if (loading) return <Spinner />;
-    if (error) return <div className="text-center py-10 text-red-600">{error}</div>;
+    if (error && !successMessage) return <div className="text-center py-10 text-red-600">{error}</div>;
 
     const canEditCore = userData?.role === 'Admin' && (article.status === ArticleStatusEnum.Draft || article.status === ArticleStatusEnum.NeedsRevision);
     const canEditContent = !([ArticleStatusEnum.Published, ArticleStatusEnum.AwaitingExpertReview].includes(article.status as ArticleStatus) && userData?.role !== 'Admin');
@@ -957,10 +1048,13 @@ const ArticleEditorPage: React.FC = () => {
             <Header />
             <main className="container mx-auto p-6">
                 <div className="bg-brand-surface p-8 rounded-lg shadow-md">
-                     <div className="flex justify-between items-start mb-6">
+                     <div className="flex justify-between items-start mb-2">
                         <h1 className="text-3xl font-bold text-brand-text-primary">{isNewArticle ? 'Create Article' : 'Edit Article'}</h1>
                         {article.status && <Badge status={article.status} />}
                     </div>
+
+                    {error && <p className="bg-red-100 text-red-700 p-3 rounded my-4 text-center">{error}</p>}
+                    {successMessage && <p className="bg-green-100 text-green-700 p-3 rounded my-4 text-center">{successMessage}</p>}
 
                     {/* Core Details Section (mostly for Admins) */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -1010,10 +1104,19 @@ const ArticleEditorPage: React.FC = () => {
                     {/* Content Section (Editable by Admins/Experts) */}
                     {!isNewArticle && (
                     <div className="space-y-6">
-                        {article.status === ArticleStatusEnum.NeedsRevision && article.adminRevisionNotes && (
+                        {article.status === ArticleStatusEnum.NeedsRevision && (
                             <div className="p-4 bg-red-100 border-l-4 border-red-500 text-red-800 rounded-r-lg">
-                                <h4 className="font-bold">Revision Notes from Admin</h4>
-                                <p>{article.adminRevisionNotes}</p>
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <h4 className="font-bold">Revision Notes from Admin</h4>
+                                        <p>{article.adminRevisionNotes || 'No specific notes provided.'}</p>
+                                    </div>
+                                    {userData?.role === 'Admin' && (
+                                        <button onClick={handleRegenerate} disabled={isRegenerating} className="bg-brand-primary text-white py-2 px-4 rounded-md hover:bg-indigo-700 disabled:bg-indigo-300 transition">
+                                            {isRegenerating ? 'Regenerating...' : 'Regenerate Content'}
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         )}
                         <div>
