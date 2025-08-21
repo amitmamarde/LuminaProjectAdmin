@@ -66,6 +66,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.indigo,
       ),
+      debugShowCheckedModeBanner: false,
       home: const ArticleSwipePage(),
     );
   }
@@ -119,19 +120,46 @@ class _ArticleSwipePageState extends State<ArticleSwipePage> {
                 color: backgroundColor,
                 child: Column(
                   children: [
-                    // Placeholder image
-                    Container(
-                      height: 250,
-                      width: double.infinity,
-                      color: Colors.grey[300],
-                      child: const Center(
-                        child: Text(
-                          'Image Feature Coming Soon',
-                          style: TextStyle(
-                              fontSize: 20, fontWeight: FontWeight.bold),
+                    if (article.imageUrl != null &&
+                        article.imageUrl!.isNotEmpty)
+                      Image.network(
+                        article.imageUrl!,
+                        height: 250,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, progress) {
+                          if (progress == null) return child;
+                          return Container(
+                            height: 250,
+                            width: double.infinity,
+                            color: Colors.grey[300],
+                            child:
+                                const Center(child: CircularProgressIndicator()),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            height: 250,
+                            width: double.infinity,
+                            color: Colors.grey[300],
+                            child: const Center(
+                                child: Icon(Icons.broken_image, size: 50)),
+                          );
+                        },
+                      )
+                    else
+                      Container(
+                        height: 250,
+                        width: double.infinity,
+                        color: Colors.grey[300],
+                        child: const Center(
+                          child: Text(
+                            'Image Not Available',
+                            style: TextStyle(
+                                fontSize: 20, fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ),
-                    ),
                     Expanded(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
@@ -199,7 +227,9 @@ class DeepDivePage extends StatelessWidget {
   // Open URL using url_launcher
   void _launchURL(String url) async {
     final uri = Uri.parse(url);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
       throw 'Could not launch $url';
     }
   }
@@ -216,9 +246,10 @@ class DeepDivePage extends StatelessWidget {
       body: Container(
         color: backgroundColor,
         padding: const EdgeInsets.all(16),
-        child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (article.imageUrl != null)
                 Image.network(

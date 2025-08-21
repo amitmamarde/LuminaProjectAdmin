@@ -3,7 +3,9 @@
     "source": "functions"
   },
   "hosting": {
-    "public": "dist",
+    // This is the critical change. It tells Firebase to deploy the web app
+    // that is built inside your consumer_app directory.
+    "public": "consumer_app/build/web",
     "ignore": [
       "firebase.json",
       "**/.*",
@@ -13,6 +15,17 @@
       {
         "source": "**",
         "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "**/index.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
       }
     ]
   },
