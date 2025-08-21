@@ -587,14 +587,106 @@ const UserProfilePage: React.FC = () => {
 };
 
 const ArticleListPage: React.FC = () => {
+    const [articles, setArticles] = useState<Article[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [filterStatus, setFilterStatus] = useState('all');
+    const [filterType, setFilterType] = useState('all');
+
     useEffect(() => {
-        console.log("Hello World");
-    }, []); // This effect runs once when the component mounts
+        setLoading(true);
+        const articlesRef = collection(db, 'articles');
+        let q: ReturnType<typeof query>;
+
+        if (filterStatus !== 'all') {
+            q = query(articlesRef, where('status', '==', filterStatus), orderBy('createdAt', 'desc'));
+        } else {
+            q = query(articlesRef, orderBy('createdAt', 'desc'));
+        }
+        
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+            const fetchedArticles = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Article));
+            setArticles(fetchedArticles);
+            setLoading(false);
+        }, (error) => {
+            console.error("Error fetching articles:", error);
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, [filterStatus]);
+
+    const filteredArticles = useMemo(() => {
+        return articles.filter(article => {
+            return filterType === 'all' || article.articleType === filterType;
+        });
+    }, [articles, filterType]);
 
     return (
-        <div>
-            <h1>Article List Page</h1>
-            <p>Check your browser's developer console for the "Hello World" message.</p>
+        <div className="bg-brand-background min-h-screen">
+            <Header />
+            <main className="container mx-auto p-6">
+                <h1 className="text-3xl font-bold text-brand-text-primary mb-6">Manage All Articles</h1>
+
+                <div className="bg-brand-surface p-4 rounded-lg shadow-md mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-brand-text-secondary mb-1">Filter by Status</label>
+                            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-primary">
+                                <option value="all">All Statuses</option>
+                                {Object.values(ArticleStatusEnum).map(status => (
+                                    <option key={status} value={status}>{status.replace(/([A-Z])/g, ' $1').trim()}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-brand-text-secondary mb-1">Filter by Type</label>
+                            <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-primary">
+                                <option value="all">All Types</option>
+                                <option value="Trending Topic">Trending Topic</option>
+                                <option value="Positive News">Positive News</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                {loading ? <Spinner /> : (
+                    filteredArticles.length > 0 ? (
+                        <div className="bg-brand-surface shadow-md rounded-lg overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                               <thead className="bg-gray-50">
+                                    <tr>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created On</th>
+                                        <th scope="col" className="relative px-6 py-3"><span className="sr-only">Edit</span></th>
+                                    </tr>
+                                </thead>
+                                 <tbody className="bg-white divide-y divide-gray-200">
+                                    {filteredArticles.map(article => (
+                                        <tr key={article.id}>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="text-sm font-medium text-gray-900">{article.title}</div>
+                                                <div className="text-sm text-gray-500">{article.categories.join(', ')}</div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{article.articleType}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap"><Badge status={article.status} /></td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{article.createdAt.toDate().toLocaleDateString()}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                <Link to={`/edit/${article.id}`} className="text-brand-primary hover:text-indigo-900">Edit</Link>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                     ) : (
+                        <div className="text-center py-10 bg-brand-surface rounded-lg shadow-md">
+                            <p className="text-brand-text-secondary">No articles match the current filters.</p>
+                        </div>
+                     )
+                )}
+            </main>
         </div>
     );
 };

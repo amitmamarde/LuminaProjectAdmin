@@ -1,42 +1,43 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Represents the structure of an Article, mirroring the Firestore document.
-/// This model is used throughout the consumer app to handle article data.
 class Article {
   final String id;
   final String title;
+  final List<String> categories;
+  final String? imageUrl;
   final String? flashContent;
   final String? deepDiveContent;
-  final String? imageUrl;
   final Timestamp? publishedAt;
-  final List<String> categories;
+  final String articleType;
   final String? sourceUrl;
   final String? sourceTitle;
 
   Article({
     required this.id,
     required this.title,
+    required this.categories,
+    this.imageUrl,
     this.flashContent,
     this.deepDiveContent,
-    this.imageUrl,
     this.publishedAt,
-    required this.categories,
+    required this.articleType,
     this.sourceUrl,
     this.sourceTitle,
   });
 
-  /// A factory constructor to create an Article instance from a Firestore document.
-  /// This is the standard way to parse data from Firestore into a local object.
-  factory Article.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final data = doc.data() ?? {};
+  // Factory constructor to create an Article instance from a Firestore document.
+  // This is a robust way to parse the data from Firestore.
+  factory Article.fromFirestore(DocumentSnapshot doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     return Article(
       id: doc.id,
-      title: data['title'] ?? 'No Title',
+      title: data['title'] ?? '',
+      categories: List<String>.from(data['categories'] ?? []),
+      imageUrl: data['imageUrl'],
       flashContent: data['flashContent'],
       deepDiveContent: data['deepDiveContent'],
-      imageUrl: data['imageUrl'],
       publishedAt: data['publishedAt'] as Timestamp?,
-      categories: List<String>.from(data['categories'] ?? []),
+      articleType: data['articleType'] ?? 'Trending Topic',
       sourceUrl: data['sourceUrl'],
       sourceTitle: data['sourceTitle'],
     );
