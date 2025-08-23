@@ -16,6 +16,7 @@ firebase-debug.log
 ## Sensitive configuration files that should not be committed.
 # These contain API keys and other sensitive project information.
 #
+serviceAccountKey.json
 # Flutter
 consumer_app/lib/firebase_options.dart
 consumer_app/android/app/google-services.json
