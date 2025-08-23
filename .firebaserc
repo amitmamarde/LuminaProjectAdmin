@@ -1,6 +1,7 @@
 {
   "projects": {
-    "Prod": "lumina-summaries"
+    "Prod": "lumina-summaries",
+    "prod": "lumina-summaries"
   },
   "targets": {},
   "etags": {}

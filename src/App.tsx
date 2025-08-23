@@ -105,6 +105,7 @@ const Spinner: React.FC = () => (
 const Badge: React.FC<{ status: ArticleStatus | UserProfile['status'] }> = ({ status }) => {
   const statusColors: Record<string, string> = {
     [ArticleStatusEnum.Draft]: 'bg-gray-200 text-gray-800',
+    'Queued': 'bg-purple-200 text-purple-800',
     [ArticleStatusEnum.AwaitingExpertReview]: 'bg-yellow-200 text-yellow-800',
     [ArticleStatusEnum.AwaitingAdminReview]: 'bg-blue-200 text-blue-800',
     [ArticleStatusEnum.NeedsRevision]: 'bg-red-200 text-red-800',
@@ -820,14 +821,10 @@ const ArticleEditorPage: React.FC = () => {
         shortDescription: '',
         status: ArticleStatusEnum.Draft,
     });
-    const [deepDiveContent, setDeepDiveContent] = useState('');
-    const [flashContent, setFlashContent] = useState('');
-    const [imagePrompt, setImagePrompt] = useState('');
-    const [adminRevisionNotes, setAdminRevisionNotes] = useState('');
-    
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isRequeuing, setIsRequeuing] = useState(false);
     const [isRegenerating, setIsRegenerating] = useState(false);
     const [error, setError] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
@@ -857,10 +854,6 @@ const ArticleEditorPage: React.FC = () => {
         if (docSnap.exists()) {
             const fetchedArticle = { id: docSnap.id, ...docSnap.data() } as Article;
             setArticle(fetchedArticle);
-            setDeepDiveContent(fetchedArticle.deepDiveContent || '');
-            setFlashContent(fetchedArticle.flashContent || '');
-            setImagePrompt(fetchedArticle.imagePrompt || '');
-            setAdminRevisionNotes(fetchedArticle.adminRevisionNotes || '');
             setSelectedExpertId(fetchedArticle.expertId || '');
         } else {
             setError('Article not found.');
@@ -899,11 +892,7 @@ const ArticleEditorPage: React.FC = () => {
 
         const dataToSave: Partial<Article> = {
             ...article,
-            flashContent,
-            deepDiveContent,
-            imagePrompt,
             status: newStatus || article.status,
-            adminRevisionNotes: newStatus === ArticleStatusEnum.NeedsRevision ? adminRevisionNotes : (article.adminRevisionNotes || ''),
         };
 
        try {
@@ -952,7 +941,7 @@ const ArticleEditorPage: React.FC = () => {
     const handlePublish = async () => {
         if (userData?.role !== 'Admin' || !id) return;
 
-        // --- IMAGE GENERATION SKIPPED ---
+        // --- IMAGE GENERATION ---
         // As requested, we are skipping the image generation step for now.
         // The article will be published without an image.
         // const imageUrl = article.imageUrl || await generateAndUploadImage();
@@ -970,14 +959,14 @@ const ArticleEditorPage: React.FC = () => {
     };
     
     const generateAndUploadImage = async (): Promise<string | null> => {
-        if (!id || !imagePrompt) {
+        if (!id || !article.imagePrompt) {
             setError("Image prompt is missing.");
             return null;
         }
         setIsSaving(true);
         try {
             const generateImageFunction = httpsCallable(functions, 'generateImage');
-            const result = await generateImageFunction({ prompt: imagePrompt });
+            const result = await generateImageFunction({ prompt: article.imagePrompt });
             const imageData = result.data as { success: boolean; imageUrl?: string; error?: string };
 
             if (!imageData.success || !imageData.imageUrl) {
@@ -991,6 +980,27 @@ const ArticleEditorPage: React.FC = () => {
             return null;
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleRequeue = async () => {
+        if (!id || userData?.role !== 'Admin') return;
+        setIsRequeuing(true);
+        setError('');
+        setSuccessMessage('');
+
+        try {
+            const requeueFunction = httpsCallable(functions, 'queueArticleContentGeneration');
+            await requeueFunction({ articleId: id });
+            showSuccessMessage('Article has been re-queued for generation! The status will update shortly.');
+            // The status will update via Firestore listener, but we can force a refetch just in case
+            setTimeout(() => {
+                fetchArticle();
+            }, 1500);
+        } catch (e: any) {
+            setError(`Failed to re-queue: ${e.message}`);
+        } finally {
+            setIsRequeuing(false);
         }
     };
 
@@ -1104,26 +1114,31 @@ const ArticleEditorPage: React.FC = () => {
                     <div className="space-y-6">
                         {article.status === ArticleStatusEnum.NeedsRevision && (
                             <div className="p-4 bg-red-100 border-l-4 border-red-500 text-red-800 rounded-r-lg">
-                                <div className="flex justify-between items-center">
+                                <div className="flex justify-between items-center gap-4">
                                     <div>
                                         <h4 className="font-bold">Revision Notes from Admin</h4>
                                         <p>{article.adminRevisionNotes || 'No specific notes provided.'}</p>
                                     </div>
                                     {userData?.role === 'Admin' && (
-                                        <button onClick={handleRegenerate} disabled={isRegenerating} className="bg-brand-primary text-white py-2 px-4 rounded-md hover:bg-indigo-700 disabled:bg-indigo-300 transition">
-                                            {isRegenerating ? 'Regenerating...' : 'Regenerate Content'}
-                                        </button>
+                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                            <button onClick={handleRequeue} disabled={isRequeuing} className="bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 disabled:bg-purple-300 transition text-sm">
+                                                {isRequeuing ? 'Re-queuing...' : 'Re-queue'}
+                                            </button>
+                                            <button onClick={handleRegenerate} disabled={isRegenerating} className="bg-brand-primary text-white py-2 px-4 rounded-md hover:bg-indigo-700 disabled:bg-indigo-300 transition text-sm">
+                                                {isRegenerating ? 'Regenerating...' : 'Regenerate Now'}
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
                             </div>
                         )}
                         <div>
-                             <label htmlFor="flashContent" className="block text-sm font-bold text-brand-text-secondary mb-1">Lumina Flash (Summary)</label>
-                             <textarea id="flashContent" value={flashContent} onChange={e => setFlashContent(e.target.value)} disabled={!canEditContent} rows={4} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-primary disabled:bg-gray-100" />
+                            <label htmlFor="flashContent" className="block text-sm font-bold text-brand-text-secondary mb-1">Lumina Flash (Summary)</label>
+                            <textarea id="flashContent" value={article.flashContent || ''} onChange={e => setArticle(p => ({ ...p, flashContent: e.target.value }))} disabled={!canEditContent} rows={4} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-primary disabled:bg-gray-100" />
                         </div>
                         <div>
                             <label className="block text-sm font-bold text-brand-text-secondary mb-1">Deep Dive (Full Article)</label>
-                            <ReactQuill theme="snow" value={deepDiveContent} onChange={setDeepDiveContent} readOnly={!canEditContent} modules={quillModules} />
+                            <ReactQuill theme="snow" value={article.deepDiveContent || ''} onChange={value => setArticle(p => ({ ...p, deepDiveContent: value }))} readOnly={!canEditContent} modules={quillModules} />
                         </div>
                          {/* Action Buttons */}
                         <div className="pt-6 border-t mt-6 flex flex-wrap gap-4 justify-end items-center">
@@ -1184,7 +1199,7 @@ const ArticleEditorPage: React.FC = () => {
                 <div className="modal-box">
                     <h3 className="font-bold text-lg">Request Revision</h3>
                     <p className="py-4">Please provide clear notes for the expert on what needs to be changed.</p>
-                    <textarea value={adminRevisionNotes} onChange={e => setAdminRevisionNotes(e.target.value)} className="w-full textarea textarea-bordered" rows={4}></textarea>
+                    <textarea value={article.adminRevisionNotes || ''} onChange={e => setArticle(p => ({ ...p, adminRevisionNotes: e.target.value }))} className="w-full textarea textarea-bordered" rows={4}></textarea>
                     <div className="modal-action">
                     <form method="dialog" className="flex gap-4">
                         <button className="btn">Cancel</button>

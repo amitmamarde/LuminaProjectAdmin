@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 class ArticleDetailScreen extends StatelessWidget {
   final Article article;
 
-  const ArticleDetailScreen({Key? key, required this.article}) : super(key: key);
+  const ArticleDetailScreen({super.key, required this.article});
 
   Future<void> _launchUrl(String url) async {
     final Uri uri = Uri.parse(url);

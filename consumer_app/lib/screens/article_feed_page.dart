@@ -4,7 +4,7 @@ import 'package:consumer_app/screens/article_detail_page.dart';
 import 'package:flutter/material.dart';
 
 class ArticleFeedPage extends StatelessWidget {
-  const ArticleFeedPage({Key? key}) : super(key: key);
+  const ArticleFeedPage({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -57,7 +57,7 @@ class ArticleFeedPage extends StatelessWidget {
 class ArticleCard extends StatelessWidget {
   final Article article;
 
-  const ArticleCard({Key? key, required this.article}) : super(key: key);
+  const ArticleCard({super.key, required this.article});
 
   @override
   Widget build(BuildContext context) {

@@ -1,11 +1,14 @@
 // This file uses the modern ES Module syntax and the v2 Cloud Functions API for a successful deployment.
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import admin from "firebase-admin";
+import { getFunctions } from "firebase-admin/functions";
 import { GoogleGenAI, Type } from "@google/genai";
 
 //  Initialize Firebase Admin SDK to interact with Firestore
+
 admin.initializeApp();
 const db = admin.firestore();
 
@@ -42,16 +45,16 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
 
       let promptPersona;
       if (articleType === 'Positive News') {
-          promptPersona = `You are an optimistic storyteller for "Lumina Positive News". Your task is to craft an uplifting and inspiring narrative about the topic: "${title}" in the categories "${categoriesText}". Focus on the positive aspects, human spirit, and hopeful outcomes.`;
+        promptPersona = `You are an optimistic storyteller for "Lumina Positive News". Your task is to craft an uplifting and inspiring narrative about the topic: "${title}" in the categories "${categoriesText}". Focus on the positive aspects, human spirit, and hopeful outcomes.`;
       } else { // Default to 'Trending Topic'
-          promptPersona = `You are a neutral, objective journalist for the "Lumina Content Platform". Your task is to validate and explain the trending topic: "${title}" in the categories "${categoriesText}". Your goal is to provide a balanced, factual, and easy-to-understand overview.`;
+        promptPersona = `You are a neutral, objective journalist for the "Lumina Content Platform". Your task is to validate and explain the trending topic: "${title}" in the categories "${categoriesText}". Your goal is to provide a balanced, factual, and easy-to-understand overview.`;
       }
 
       const textPrompt = `${promptPersona}
       ${descriptionText}
-      
+
       Please provide your response in a single, minified JSON object with three specific keys:
-      1. "flashContent": A concise, factual summary of 60-100 words. This is the "Lumina Flash". For "Positive News", make this summary engaging and uplifting.
+        1. "flashContent": A concise, factual summary of 60-100 words. This is the "Lumina Flash". For "Positive News", make this summary engaging and uplifting.
       2. "deepDiveContent": A detailed, neutral explanation of 500-700 words. This is the "Deep Dive". This content MUST be formatted using simple, clean HTML for readability. Use headings (e.g., <h2>Key Points</h2>), bold text (e.g., <strong>important term</strong>), paragraphs (e.g., <p>text</p>), and unordered lists (e.g., <ul><li>list item</li></ul>) where appropriate. To make the article scannable and visually appealing for web readers, please use shorter paragraphs with clear spacing. Do not use H1 headings. Start with a paragraph, not a heading.
       3. "imagePrompt": A vivid, descriptive text prompt (not a URL) for an AI image generator to create a symbolic, non-controversial image representing the topic. For "Positive News", this should be an inspiring and positive image prompt. For example: "A diverse group of people planting a vibrant, glowing tree on a hill overlooking a sunrise."
       
@@ -59,7 +62,7 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
 
       const textResponse = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: [{ parts: [{ text: textPrompt }] }],
+          contents: [{ parts: [{ text: textPrompt }] }],
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -76,13 +79,13 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
 
       const jsonString = textResponse.text.trim();
       const generatedText = JSON.parse(jsonString);
-      console.log(`[${articleId}] Successfully generated text content.`);
-      
+        console.log(`[${articleId}] Successfully generated text content.`);
+
       const articleRef = db.collection('articles').doc(articleId);
       const nextStatus = articleType === 'Positive News' ? 'AwaitingAdminReview' : 'AwaitingExpertReview';
-      
+
       await articleRef.update({
-        flashContent: generatedText.flashContent,
+          flashContent: generatedText.flashContent,
         deepDiveContent: generatedText.deepDiveContent,
         imagePrompt: generatedText.imagePrompt,
         status: nextStatus,
@@ -114,54 +117,94 @@ export const generateArticleContent = onDocumentCreated({
   document: "articles/{articleId}",
   region: "europe-west1",
   secrets: ["GEMINI_API_KEY"],
-  // This is the key change. It ensures that a maximum of 10 instances of this
-  // function will run at once, throttling the calls to the Gemini API to
-  // stay within the free tier's rate limit (10 RPM).
-  concurrency: 10,
+  // This function is now a fast dispatcher, so we can allow high concurrency.
+  concurrency: 50,
 }, async (event) => {
     const articleId = event.params.articleId;
     const snapshot = event.data;
 
     if (!snapshot) {
-      console.log(`[${articleId}] Event is missing data snapshot. Exiting.`);
+      console.log(`[${articleId}] Event is missing data. Exiting.`);
       return;
     }
-    
-    const geminiApiKey = process.env.GEMINI_API_KEY;
 
-    if (!geminiApiKey) {
-      console.error(`[${articleId}] Gemini API key is not configured in secrets. Please run 'firebase functions:secrets:set GEMINI_API_KEY' and redeploy.`);
-      const articleRef = db.collection('articles').doc(articleId);
-      await articleRef.update({
-        status: 'NeedsRevision',
-        adminRevisionNotes: 'AI configuration error: The Gemini API key is missing. Please contact an administrator.'
-      });
-      return;
-    }
-    
-    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
     const data = snapshot.data();
-    
-    if (!data || data.status !== 'Draft') {
-      console.log(`[${articleId}] Ignoring article with status '${data?.status}'.`);
+
+    // This function now only acts as a dispatcher for new 'Draft' articles.
+    if (data.status !== 'Draft') {
+      console.log(`[${articleId}] Ignoring article with status '${data.status}'. Not a new draft.`);
       return;
     }
-    
-    const { title, categories, shortDescription, articleType } = data;
-    console.log(`[${articleId}] Processing new draft: "${title}" of type "${articleType}"`);
-    
+
+    console.log(`[${articleId}] New draft detected. Queuing for content generation.`);
+
     try {
-      await performContentGeneration(articleId, data, geminiApiKey);
+      // Enqueue the task for processing by the 'processArticle' worker function.
+      const queue = getFunctions().taskQueue("processArticle");
+      await queue.enqueue({ articleId: articleId });
+
+      // Update the article status to 'Queued' to provide UI feedback and prevent re-triggering.
+      await snapshot.ref.update({ status: 'Queued' });
+
+      console.log(`[${articleId}] Successfully queued for generation.`);
     } catch (error) {
-      // The helper function already updated the document with an error state.
-      // We just log that the process concluded with a failure.
-      console.error(`[${articleId}] Generation process failed. The document has been updated with error details.`);
+      console.error(`[${articleId}] Failed to enqueue article for generation:`, error);
+      // If enqueueing fails, set a status that allows for manual re-triggering.
+      await snapshot.ref.update({
+        status: 'NeedsRevision',
+        adminRevisionNotes: `System Error: Failed to queue the article for AI content generation. Error: ${error.message}`
+      });
     }
 });
 
 /**
+ * A callable function that allows an Admin to manually re-queue an article for generation.
+ */
+export const queueArticleContentGeneration = onCall(
+    {
+        region: "europe-west1",
+        secrets: ["GEMINI_API_KEY"],
+        cors: [/luminaprojectadmin\.netlify\.app$/, "http://localhost:5173"],
+    },
+    async (request) => {
+        // 1. Check authentication and authorization
+        if (!request.auth) {
+            throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+        }
+        const userDoc = await db.collection('users').doc(request.auth.uid).get();
+        if (!userDoc.exists || userDoc.data().role !== 'Admin') {
+            throw new HttpsError('permission-denied', 'Only admins can re-queue articles.');
+        }
+
+        // 2. Extract article data from request
+        const { articleId } = request.data;
+        if (!articleId || typeof articleId !== 'string') {
+            throw new HttpsError('invalid-argument', 'The function must be called with an "articleId" argument.');
+        }
+
+        // 3. Enqueue the article generation task
+        try {
+            const queue = getFunctions().taskQueue("processArticle");
+            await queue.enqueue({ articleId: articleId });
+
+            // Update status to Queued
+            await db.collection('articles').doc(articleId).update({
+                status: 'Queued',
+                // Clear any previous revision notes when re-queueing.
+                adminRevisionNotes: admin.firestore.FieldValue.delete()
+            });
+
+            return { success: true, message: `Successfully queued content generation for ${articleId}.` };
+        } catch (error) {
+            console.error(`[${articleId}] Failed to enqueue article for regeneration:`, error);
+            throw new HttpsError('internal', 'Failed to enqueue the task.', { originalError: error.message });
+        }
+    }
+);
+
+/**
  * A callable function that allows an Admin to manually trigger content regeneration
- * for an article, typically one that previously failed.
+ * for an article, typically one that previously failed. This is synchronous and bypasses the queue.
  */
 export const regenerateArticleContent = onCall({
   region: "europe-west1",
@@ -215,9 +258,9 @@ async function processDiscoveryConfig(config, ai, db, promptSchema) {
         // STEP 1: Use Google Search to get grounded, up-to-date information.
         let searchPrompt;
         if (config.articleType === 'Positive News') {
-            searchPrompt = `Using Google Search, find 5 recent, uplifting, and positive news stories from ${config.region}. Summarize them and include their sources.`;
+            searchPrompt = `Using Google Search, find 5 distinct and recent uplifting, positive news stories from ${config.region}. For each story, provide a brief summary and its source URL.`;
         } else { // Trending Topic
-            searchPrompt = `Using Google Search, find the top 5 trending news topics in ${config.region} right now. Summarize their significance.`;
+            searchPrompt = `Using Google Search, find the top 5 distinct trending news topics in ${config.region} right now. Summarize their significance.`;
         }
 
         const groundedResponse = await ai.models.generateContent({
@@ -306,6 +349,8 @@ ${groundedText}`;
         }
     } catch (error) {
         console.error(`Failed to discover topics for ${config.articleType} in ${config.region}:`, error);
+        // Re-throw the error so that Promise.allSettled can capture the failure.
+        throw error;
     }
 }
 
@@ -364,7 +409,17 @@ export const discoverTopics = onSchedule({
         processDiscoveryConfig(config, ai, db, promptSchema)
     );
 
-    await Promise.all(discoveryPromises);
+    const results = await Promise.allSettled(discoveryPromises);
+
+    console.log("Scheduled topic discovery complete. Summary:");
+    results.forEach((result, index) => {
+        const config = discoveryConfigs[index];
+        if (result.status === 'fulfilled') {
+            console.log(`  [SUCCESS] ${config.articleType} in ${config.region}`);
+        } else {
+            console.error(`  [FAILED]  ${config.articleType} in ${config.region}:`, result.reason.message);
+        }
+    });
 });
 
 /**
@@ -409,3 +464,53 @@ export const generateImage = onCall({
         throw new HttpsError('internal', 'Failed to generate image.', error.message);
     }
 });
+
+export const processArticle = onTaskDispatched(
+    {
+        region: "europe-west1",
+        secrets: ["GEMINI_API_KEY"],
+        retryConfig: {
+            maxAttempts: 3,
+            minBackoffSeconds: 60,
+        },
+        rateLimits: {
+            // This is the key for rate-limiting. It ensures only one article is
+            // generated at a time, respecting the Gemini API limits.
+            maxConcurrentDispatches: 1,
+        }
+    },
+    async (req) => {
+        const { articleId } = req.data;
+        if (!articleId) {
+            console.error("Task received without an articleId. Aborting.", req.data);
+            return; // Acknowledge the task to prevent retries for a malformed request.
+        }
+
+        const geminiApiKey = process.env.GEMINI_API_KEY;
+        if (!geminiApiKey) {
+            console.error(`[${articleId}] Gemini API key is not configured. Cannot process task.`);
+            await db.collection('articles').doc(articleId).update({
+                status: 'NeedsRevision',
+                adminRevisionNotes: 'AI configuration error: The Gemini API key is missing. Please contact an administrator.'
+            });
+            return;
+        }
+
+        const articleRef = db.collection('articles').doc(articleId);
+        const articleDoc = await articleRef.get();
+
+        if (!articleDoc.exists) {
+            console.error(`[${articleId}] Article document not found in Firestore. Aborting task.`);
+            return;
+        }
+        const articleData = articleDoc.data();
+
+        try {
+            await performContentGeneration(articleId, articleData, geminiApiKey);
+        } catch (error) {
+            // performContentGeneration already updates the document status on failure.
+            // We log the error here, but we don't re-throw it, as this would cause a retry for a permanent failure.
+            console.error(`[${articleId}] Content generation failed for queued task. The article has been marked for revision. Error:`, error.message);
+        }
+    }
+);

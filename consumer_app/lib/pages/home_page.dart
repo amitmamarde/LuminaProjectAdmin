@@ -6,7 +6,7 @@ import '../models/article_model.dart';
 import '../screens/article_detail_screen.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({Key? key}) : super(key: key);
+  const HomePage({super.key});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -60,7 +60,7 @@ class _HomePageState extends State<HomePage> {
 class ArticleCard extends StatelessWidget {
   final Article article;
 
-  const ArticleCard({Key? key, required this.article}) : super(key: key);
+  const ArticleCard({super.key, required this.article});
 
   void _onShare(BuildContext context) {
     final box = context.findRenderObject() as RenderBox?;
