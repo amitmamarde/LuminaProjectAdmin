@@ -606,7 +606,7 @@ const ArticleListPage: React.FC = () => {
         }
         
         const unsubscribe = onSnapshot(q, (querySnapshot) => {
-            const fetchedArticles = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Article));
+            const fetchedArticles = querySnapshot.docs.map(doc => (Object.assign({ id: doc.id }, doc.data()) as Article));
             setArticles(fetchedArticles);
             setLoading(false);
         }, (error) => {
@@ -731,7 +731,7 @@ const TaskListPage: React.FC<{ mode: 'my-tasks' | 'admin-review' }> = ({ mode })
         }
 
         const unsubscribe = onSnapshot(q, (querySnapshot) => {
-            const fetchedTasks = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Article));
+            const fetchedTasks = querySnapshot.docs.map(doc => (Object.assign({ id: doc.id }, doc.data()) as Article));
             setTasks(fetchedTasks);
             setLoading(false);
         }, (error) => {
