@@ -21,7 +21,8 @@ import {
     updateDoc,
     serverTimestamp,
     onSnapshot,
-    writeBatch
+    writeBatch,
+    Timestamp
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 
@@ -953,8 +954,8 @@ const ArticleEditorPage: React.FC = () => {
             // imageUrl, // This is commented out to skip adding an image.
         };
 
-        await saveArticle(id, dataToUpdate);
-        setArticle(prev => ({...prev, ...dataToUpdate, status: ArticleStatusEnum.Published}));
+        await saveArticle(id, dataToUpdate as Partial<Article>);
+        setArticle(prev => ({...prev, status: ArticleStatusEnum.Published, publishedAt: Timestamp.now()}));
         navigate('/articles');
     };
     
@@ -1312,7 +1313,7 @@ const TopicDiscoveryPage: React.FC = () => {
                 region: topic.region,
                 shortDescription: topic.shortDescription,
                 status: ArticleStatusEnum.Draft,
-                createdAt: serverTimestamp(),
+                createdAt: serverTimestamp() as any,
                 discoveredAt: topic.createdAt,
             };
             // Conditionally add source fields to avoid writing 'undefined' to Firestore.
