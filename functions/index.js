@@ -233,21 +233,32 @@ export const requeueAllFailedArticles = onCall(
                 return { success: true, message: "No articles to re-queue.", count: 0 };
             }
 
+            const failedArticles = querySnapshot.docs;
             const queue = getFunctions().taskQueue("processArticle");
-            const batch = db.batch();
-            const enqueuePromises = [];
             let requeuedCount = 0;
 
-            querySnapshot.forEach(doc => {
-                const articleId = doc.id;
-                enqueuePromises.push(queue.enqueue({ articleId }));
-                const docRef = articlesRef.doc(articleId);
-                batch.update(docRef, { status: 'Queued', adminRevisionNotes: admin.firestore.FieldValue.delete() });
-                requeuedCount++;
-            });
+            // Process articles in chunks to avoid exceeding Firestore and Task Queue limits.
+            // Firestore batch writes are limited to 500 operations.
+            // Task Queue bulk enqueue is limited to 100 tasks per call. We'll use 100.
+            const chunkSize = 100;
+            for (let i = 0; i < failedArticles.length; i += chunkSize) {
+                const chunk = failedArticles.slice(i, i + chunkSize);
+                console.log(`Processing chunk ${Math.floor(i / chunkSize) + 1}/${Math.ceil(failedArticles.length / chunkSize)} with ${chunk.length} articles.`);
 
-            await Promise.all(enqueuePromises);
-            await batch.commit();
+                // Prepare a batch of tasks for the Task Queue
+                const tasksToEnqueue = chunk.map(doc => ({ articleId: doc.id }));
+
+                // Prepare a batch of writes for Firestore
+                const firestoreBatch = db.batch();
+                chunk.forEach(doc => {
+                    const docRef = articlesRef.doc(doc.id);
+                    firestoreBatch.update(docRef, { status: 'Queued', adminRevisionNotes: admin.firestore.FieldValue.delete() });
+                });
+
+                // Execute both operations for the chunk concurrently.
+                await Promise.all([queue.enqueue(tasksToEnqueue), firestoreBatch.commit()]);
+                requeuedCount += chunk.length;
+            }
 
             console.log(`Successfully re-queued ${requeuedCount} articles.`);
             return { success: true, message: `Successfully re-queued ${requeuedCount} articles.`, count: requeuedCount };
