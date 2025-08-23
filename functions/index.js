@@ -259,7 +259,7 @@ export const requeueAllFailedArticles = onCall(
 );
 /**
  * A callable function that allows an Admin to manually trigger content regeneration
- * for an article, typically one that previously failed. This is synchronous and bypasses the queue.
+ * for an article , typically one that previously failed. This is synchronous and bypasses the queue.
  */
 export const regenerateArticleContent = onCall({
   region: "europe-west1",

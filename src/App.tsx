@@ -472,7 +472,7 @@ const DashboardPage: React.FC = () => {
         setFeedback('');
         try {
             const requeueFunction = httpsCallable(functions, 'requeueAllFailedArticles');
-            const result = await requeueFunction();
+            const result = await requeueFunction({});
             const data = result.data as { success: boolean; message: string; count: number };
             setFeedback(data.message || 'An unknown error occurred.');
         } catch (error: any) {
@@ -1024,11 +1024,7 @@ const ArticleEditorPage: React.FC = () => {
         try {
             const regenerateFunction = httpsCallable(functions, 'regenerateArticleContent');
             await regenerateFunction({ articleId: id });
-            showSuccessMessage('Regeneration complete! Fetching updated content...');
-            // Wait a moment for the backend changes to propagate before refetching
-            setTimeout(() => {
-                fetchArticle();
-            }, 2000);
+            showSuccessMessage('Article has been queued for regeneration. The status will update shortly.');
         } catch (e: any) {
             setError(`Regeneration failed: ${e.message}`);
         } finally {
@@ -1131,8 +1127,8 @@ const ArticleEditorPage: React.FC = () => {
                                         <p>{article.adminRevisionNotes || 'An unknown error occurred. You can try regenerating the content now.'}</p>
                                     </div>
                                     <div className="flex items-center gap-2 flex-shrink-0">
-                                        <button onClick={handleRegenerate} disabled={isRegenerating} className="bg-brand-primary text-white py-2 px-4 rounded-md hover:bg-indigo-700 disabled:bg-indigo-300 transition text-sm">
-                                            {isRegenerating ? 'Regenerating...' : 'Regenerate Now'}
+                                        <button onClick={handleRegenerate} disabled={isRegenerating} className="bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 disabled:bg-purple-300 transition text-sm">
+                                            {isRegenerating ? 'Queueing...' : 'Queue for Regeneration'}
                                         </button>
                                     </div>
                                 </div>
