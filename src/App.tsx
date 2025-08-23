@@ -107,6 +107,7 @@ const Badge: React.FC<{ status: ArticleStatus | UserProfile['status'] }> = ({ st
   const statusColors: Record<string, string> = {
     [ArticleStatusEnum.Draft]: 'bg-gray-200 text-gray-800',
     'Queued': 'bg-purple-200 text-purple-800',
+    [ArticleStatusEnum.GenerationFailed]: 'bg-pink-200 text-pink-800',
     [ArticleStatusEnum.AwaitingExpertReview]: 'bg-yellow-200 text-yellow-800',
     [ArticleStatusEnum.AwaitingAdminReview]: 'bg-blue-200 text-blue-800',
     [ArticleStatusEnum.NeedsRevision]: 'bg-red-200 text-red-800',
@@ -458,13 +459,44 @@ const LoginPage: React.FC = () => {
 
 const DashboardPage: React.FC = () => {
     const { userData } = useAuth();
+    const [isRequeuing, setIsRequeuing] = useState(false);
+    const [feedback, setFeedback] = useState('');
+
     if (!userData) return <Navigate to="/login" />;
+
+    const handleRequeueAll = async () => {
+        if (!window.confirm('Are you sure you want to re-queue all failed articles for generation?')) {
+            return;
+        }
+        setIsRequeuing(true);
+        setFeedback('');
+        try {
+            const requeueFunction = httpsCallable(functions, 'requeueAllFailedArticles');
+            const result = await requeueFunction();
+            const data = result.data as { success: boolean; message: string; count: number };
+            setFeedback(data.message || 'An unknown error occurred.');
+        } catch (error: any) {
+            console.error("Error re-queuing articles:", error);
+            setFeedback(`Error: ${error.message || 'Failed to re-queue articles.'}`);
+        } finally {
+            setIsRequeuing(false);
+            setTimeout(() => setFeedback(''), 5000);
+        }
+    };
 
     return (
         <div className="bg-brand-background min-h-screen">
             <Header />
             <main className="container mx-auto p-6">
-                <h1 className="text-3xl font-bold text-brand-text-primary mb-6">Dashboard</h1>
+                <div className="flex justify-between items-center mb-6">
+                    <h1 className="text-3xl font-bold text-brand-text-primary">Dashboard</h1>
+                    {userData.role === 'Admin' && (
+                        <button onClick={handleRequeueAll} disabled={isRequeuing} className="bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 disabled:bg-purple-300 transition">
+                            {isRequeuing ? 'Re-queueing...' : 'Re-queue All Failed Articles'}
+                        </button>
+                    )}
+                </div>
+                {feedback && <div className={`p-3 rounded mb-4 text-center ${feedback.startsWith('Error') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>{feedback}</div>}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <DashboardCard title="My Work Queue" link="/my-tasks" description="View articles assigned to you for review or revision." />
                     {userData.role === 'Admin' && <DashboardCard title="Review Submissions" link="/admin-review" description="Review articles submitted by experts." />}
@@ -825,7 +857,6 @@ const ArticleEditorPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
-    const [isRequeuing, setIsRequeuing] = useState(false);
     const [isRegenerating, setIsRegenerating] = useState(false);
     const [error, setError] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
@@ -984,27 +1015,6 @@ const ArticleEditorPage: React.FC = () => {
         }
     };
 
-    const handleRequeue = async () => {
-        if (!id || userData?.role !== 'Admin') return;
-        setIsRequeuing(true);
-        setError('');
-        setSuccessMessage('');
-
-        try {
-            const requeueFunction = httpsCallable(functions, 'queueArticleContentGeneration');
-            await requeueFunction({ articleId: id });
-            showSuccessMessage('Article has been re-queued for generation! The status will update shortly.');
-            // The status will update via Firestore listener, but we can force a refetch just in case
-            setTimeout(() => {
-                fetchArticle();
-            }, 1500);
-        } catch (e: any) {
-            setError(`Failed to re-queue: ${e.message}`);
-        } finally {
-            setIsRequeuing(false);
-        }
-    };
-
     const handleRegenerate = async () => {
         if (!id || userData?.role !== 'Admin') return;
         setIsRegenerating(true);
@@ -1113,23 +1123,26 @@ const ArticleEditorPage: React.FC = () => {
                     {/* Content Section (Editable by Admins/Experts) */}
                     {!isNewArticle && (
                     <div className="space-y-6">
-                        {article.status === ArticleStatusEnum.NeedsRevision && (
-                            <div className="p-4 bg-red-100 border-l-4 border-red-500 text-red-800 rounded-r-lg">
+                        {article.status === ArticleStatusEnum.GenerationFailed && userData?.role === 'Admin' && (
+                            <div className="p-4 bg-pink-100 border-l-4 border-pink-500 text-pink-800 rounded-r-lg">
                                 <div className="flex justify-between items-center gap-4">
                                     <div>
-                                        <h4 className="font-bold">Revision Notes from Admin</h4>
-                                        <p>{article.adminRevisionNotes || 'No specific notes provided.'}</p>
+                                        <h4 className="font-bold">Automatic Generation Failed</h4>
+                                        <p>{article.adminRevisionNotes || 'An unknown error occurred. You can try regenerating the content now.'}</p>
                                     </div>
-                                    {userData?.role === 'Admin' && (
-                                        <div className="flex items-center gap-2 flex-shrink-0">
-                                            <button onClick={handleRequeue} disabled={isRequeuing} className="bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 disabled:bg-purple-300 transition text-sm">
-                                                {isRequeuing ? 'Re-queuing...' : 'Re-queue'}
-                                            </button>
-                                            <button onClick={handleRegenerate} disabled={isRegenerating} className="bg-brand-primary text-white py-2 px-4 rounded-md hover:bg-indigo-700 disabled:bg-indigo-300 transition text-sm">
-                                                {isRegenerating ? 'Regenerating...' : 'Regenerate Now'}
-                                            </button>
-                                        </div>
-                                    )}
+                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                        <button onClick={handleRegenerate} disabled={isRegenerating} className="bg-brand-primary text-white py-2 px-4 rounded-md hover:bg-indigo-700 disabled:bg-indigo-300 transition text-sm">
+                                            {isRegenerating ? 'Regenerating...' : 'Regenerate Now'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        {article.status === ArticleStatusEnum.NeedsRevision && (
+                            <div className="p-4 bg-red-100 border-l-4 border-red-500 text-red-800 rounded-r-lg">
+                                <div>
+                                    <h4 className="font-bold">Revision Notes from Admin</h4>
+                                    <p>{article.adminRevisionNotes || 'No specific notes provided.'}</p>
                                 </div>
                             </div>
                         )}

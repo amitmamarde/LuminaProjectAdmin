@@ -101,7 +101,7 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
       // Use a more specific error message if available, otherwise a generic one.
       const errorMessage = error.message || 'An unknown error occurred.';
       await articleRef.update({
-        status: 'NeedsRevision',
+        status: 'GenerationFailed',
         adminRevisionNotes: `AI content generation failed. Error: ${errorMessage}. Please review the draft, create content manually, or delete and recreate the draft.`
       });
       // Re-throw the error so the calling function knows it failed.
@@ -151,7 +151,7 @@ export const generateArticleContent = onDocumentCreated({
       console.error(`[${articleId}] Failed to enqueue article for generation:`, error);
       // If enqueueing fails, set a status that allows for manual re-triggering.
       await snapshot.ref.update({
-        status: 'NeedsRevision',
+        status: 'GenerationFailed',
         adminRevisionNotes: `System Error: Failed to queue the article for AI content generation. Error: ${error.message}`
       });
     }
@@ -202,6 +202,61 @@ export const queueArticleContentGeneration = onCall(
     }
 );
 
+/**
+ * A callable function that allows an Admin to re-queue all articles that
+ * previously failed during generation.
+ */
+export const requeueAllFailedArticles = onCall(
+    {
+        region: "europe-west1",
+        secrets: ["GEMINI_API_KEY"],
+        cors: [/luminaprojectadmin\.netlify\.app$/, "http://localhost:5173"],
+    },
+    async (request) => {
+        // 1. Check authentication and authorization
+        if (!request.auth) {
+            throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+        }
+        const userDoc = await db.collection('users').doc(request.auth.uid).get();
+        if (!userDoc.exists || userDoc.data().role !== 'Admin') {
+            throw new HttpsError('permission-denied', 'Only admins can perform this action.');
+        }
+
+        console.log("Starting bulk re-queue for all 'GenerationFailed' articles.");
+
+        try {
+            const articlesRef = db.collection('articles');
+            const querySnapshot = await articlesRef.where('status', '==', 'GenerationFailed').get();
+
+            if (querySnapshot.empty) {
+                console.log("No articles found with status 'GenerationFailed'.");
+                return { success: true, message: "No articles to re-queue.", count: 0 };
+            }
+
+            const queue = getFunctions().taskQueue("processArticle");
+            const batch = db.batch();
+            const enqueuePromises = [];
+            let requeuedCount = 0;
+
+            querySnapshot.forEach(doc => {
+                const articleId = doc.id;
+                enqueuePromises.push(queue.enqueue({ articleId }));
+                const docRef = articlesRef.doc(articleId);
+                batch.update(docRef, { status: 'Queued', adminRevisionNotes: admin.firestore.FieldValue.delete() });
+                requeuedCount++;
+            });
+
+            await Promise.all(enqueuePromises);
+            await batch.commit();
+
+            console.log(`Successfully re-queued ${requeuedCount} articles.`);
+            return { success: true, message: `Successfully re-queued ${requeuedCount} articles.`, count: requeuedCount };
+        } catch (error) {
+            console.error("Failed to re-queue all failed articles:", error);
+            throw new HttpsError('internal', 'An error occurred during the bulk re-queue process.', { originalError: error.message });
+        }
+    }
+);
 /**
  * A callable function that allows an Admin to manually trigger content regeneration
  * for an article, typically one that previously failed. This is synchronous and bypasses the queue.

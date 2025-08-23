@@ -2,6 +2,7 @@ import type { Timestamp } from 'firebase/firestore';
 
 export enum ArticleStatus {
   Draft = 'Draft',
+  GenerationFailed = 'GenerationFailed',
   AwaitingExpertReview = 'AwaitingExpertReview',
   AwaitingAdminReview = 'AwaitingAdminReview',
   NeedsRevision = 'NeedsRevision',
