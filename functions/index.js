@@ -6,6 +6,38 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import admin from "firebase-admin";
 import { getFunctions } from "firebase-admin/functions";
 import { GoogleGenAI, Type } from "@google/genai";
+import SOURCE_REGISTRY from "./source-registry.json" with { type: "json" };
+
+// A global system prompt to enforce quality, tone, and sourcing rules across all AI interactions.
+const GLOBAL_SYSTEM_PROMPT = `You are a news curation and fact-check assistant for a quality-first news app.
+
+STRICT SOURCE POLICY:
+- Only use URLs/domains that appear in the provided SOURCE_REGISTRY or ALLOWED DOMAINS input.
+- If a requested source is behind a paywall or lacks open access, SKIP it unless it is marked as "allowed_paywalled": true.
+- Do NOT add sources that are not explicitly listed. Do NOT use generic aggregators unless they are allow-listed.
+- If a query uses a public search engine, always add site: filters restricted to the allow-listed domains.
+
+GEOGRAPHY AND RELEVANCE:
+- Prioritize stories by user_location (e.g., India, Europe, USA, Worldwide). Avoid ultra-local stories that don’t travel across borders.
+- Always prefer globally impactful research, solutions journalism, and positive developments.
+
+CONTENT PILLARS:
+1) POSITIVE/TRENDING NEWS (flash summary only, link out to original)
+2) RESEARCH & BREAKTHROUGHS (flash summary only, link out to original)
+3) MISINFORMATION WATCH (draft full explainer/fact-check; route to expert review)
+
+FRESHNESS & QUALITY:
+- Prefer items published in the last 72 hours (or newly updated).
+- Prefer primary sources (official press releases, university newsrooms, journals) or reputable explainers.
+- For misinfo: prefer IFCN signatories and recognized fact-checkers.
+
+ETHICS:
+- No clickbait. No sensationalism. Neutral, clear, and helpful tone.
+- Cite all sources used with canonical URLs.
+- If confidence is low or claims are uncertain, say so explicitly and propose expert review.
+
+OUTPUT:
+- Always conform to the OUTPUT_SCHEMA provided per task.`;
 
 //  Initialize Firebase Admin SDK to interact with Firestore
 
@@ -48,17 +80,20 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
       // For Trending and Positive news, we only generate a summary as we link to the source.
       if (articleType === 'Trending Topic' || articleType === 'Positive News') {
         console.log(`[${articleId}] Generating summary-only content for a '${articleType}' article.`);
-        
-        const sourceContext = sourceUrl ? `The original story can be found at ${sourceUrl}.` : '';
-        
-        promptPersona = articleType === 'Positive News'
-          ? `You are an optimistic storyteller for "Lumina Positive News". Your task is to craft an uplifting and inspiring summary (60-100 words) about the topic: "${title}" in the categories "${categoriesText}". ${sourceContext} Focus on the positive aspects, human spirit, and hopeful outcomes.`
-          : `You are a neutral, objective journalist for the "Lumina Content Platform". Your task is to validate and summarize the trending topic: "${title}" in the categories "${categoriesText}". ${sourceContext} Your goal is to provide a balanced, factual, and easy-to-understand summary of 60-100 words.`;
+
+        promptPersona = `You are a helpful summarizer for the "Lumina Content Platform". Your task is to create a flash summary for the topic: "${title}".`;
 
         textPrompt = `${promptPersona}
-        ${descriptionText}
+        The original article is from: ${sourceUrl}.
+        The user has provided this context: "${shortDescription}".
+
+        Based on the article content (which you should access if possible) and the provided context, produce a crisp, neutral summary.
+
         Please provide your response in a single, minified JSON object with two specific keys:
-          1. "flashContent": The concise, factual summary of 60-100 words. This is the "Lumina Flash".
+          1. "flashContent": This should contain three parts, formatted for HTML display:
+             - A "Why it matters" sentence (e.g., <p><strong>Why it matters:</strong> This discovery could lead to new treatments...</p>).
+             - A concise summary of 70-110 words (e.g., <p>Researchers have announced...</p>).
+             - 3 bullet points highlighting key takeaways (e.g., <ul><li>Impact...</li><li>Who/Where...</li><li>What's next...</li></ul>).
           2. "imagePrompt": A vivid, descriptive text prompt for an AI image generator to create a symbolic, non-controversial image representing the topic.
         Do not include any other text or explanations outside of the single JSON object.`;
 
@@ -74,14 +109,21 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
       // For Misinformation, we generate a full deep dive.
       } else if (articleType === 'Misinformation') {
         console.log(`[${articleId}] Generating full deep-dive content for a 'Misinformation' article.`);
-        promptPersona = `You are a neutral, objective fact-checker for the "Lumina Content Platform". Your task is to analyze and debunk the misinformation topic: "${title}" in the categories "${categoriesText}". Your goal is to provide a clear, evidence-based, and easy-to-understand explanation that clarifies the facts without being preachy or condescending.`;
+        promptPersona = `You are a neutral, objective fact-checker for the "Lumina Content Platform". Your task is to write a fact-check draft for the topic: "${title}".`;
 
         textPrompt = `${promptPersona}
         ${descriptionText}
+        Your goal is to write a balanced, fully sourced explainer that assesses the claim.
+
         Please provide your response in a single, minified JSON object with three specific keys:
-          1. "flashContent": A concise, factual summary of 60-100 words that quickly debunks the misinformation. This is the "Lumina Flash".
-          2. "deepDiveContent": A detailed, neutral explanation of 500-700 words that breaks down the misinformation, presents the facts with evidence, and explains the context. This is the "Deep Dive". This content MUST be formatted using simple, clean HTML for readability. Use headings (e.g., <h2>Key Points</h2>), bold text (e.g., <strong>important term</strong>), paragraphs (e.g., <p>text</p>), and unordered lists (e.g., <ul><li>list item</li></ul>) where appropriate. To make the article scannable and visually appealing for web readers, please use shorter paragraphs with clear spacing. Do not use H1 headings. Start with a paragraph, not a heading.
-          3. "imagePrompt": A vivid, descriptive text prompt for an AI image generator to create a symbolic, neutral image representing the concept of truth or clarity, avoiding any imagery from the misinformation itself. For example: "A magnifying glass focusing on a single glowing particle of truth amidst a sea of distorted, blurry shapes."
+          1. "flashContent": A concise, factual summary of 60-100 words that quickly states the verdict and the main reason. This is the "Lumina Flash".
+          2. "deepDiveContent": A detailed, neutral explanation formatted with clean HTML. It MUST include the following sections:
+             - A verdict (e.g., <h2>Verdict: Mostly False</h2>).
+             - A "What Was Claimed" section (e.g., <h3>What Was Claimed</h3><p>...</p>).
+             - An "Analysis" section that breaks down the evidence point-by-point (e.g., <h3>Analysis</h3><p>...</p><ul><li>...</li></ul>).
+             - A "Context" section explaining what's missing or how the claim spread (e.g., <h3>Context</h3><p>...</p>).
+             Use headings (h2, h3), bold text, paragraphs, and lists. Use shorter paragraphs for readability. Do not use H1 headings.
+          3. "imagePrompt": A vivid, descriptive text prompt for an AI image generator to create a symbolic, neutral image representing truth or clarity (e.g., "A clear crystal prism refracting a single beam of light into a rainbow on a dark background.").
         Do not include any other text or explanations outside of the single JSON object.`;
 
         responseSchema = {
@@ -100,6 +142,7 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
       console.log(`[${articleId}] Calling Gemini API...`);
       const textResponse = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
+        systemInstruction: { parts: [{ text: GLOBAL_SYSTEM_PROMPT }] },
           contents: [{ parts: [{ text: textPrompt }] }],
         config: {
           responseMimeType: "application/json",
@@ -110,22 +153,28 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
       const jsonString = textResponse.text.trim();
       const generatedText = JSON.parse(jsonString);
       console.log(`[${articleId}] Successfully generated content from API.`);
-
+ 
       const articleRef = db.collection('articles').doc(articleId);
       
-      // Positive News goes straight to Admin review.
-      // Trending Topics and Misinformation go to an Expert first.
-      const nextStatus = articleType === 'Positive News' ? 'AwaitingAdminReview' : 'AwaitingExpertReview';
-
-      // Build the update payload based on what was generated
+      // --- New Status Logic ---
+      // Trending/Positive News are auto-published. Misinformation goes to expert review.
+      let nextStatus;
       const updatePayload = {
         flashContent: generatedText.flashContent,
         imagePrompt: generatedText.imagePrompt,
-        status: nextStatus,
         // Clear any previous revision notes upon successful regeneration
         adminRevisionNotes: admin.firestore.FieldValue.delete(),
       };
-
+ 
+      if (articleType === 'Trending Topic' || articleType === 'Positive News') {
+          nextStatus = 'Published';
+          updatePayload.status = nextStatus;
+          updatePayload.publishedAt = admin.firestore.FieldValue.serverTimestamp();
+      } else { // Misinformation
+          nextStatus = 'AwaitingExpertReview';
+          updatePayload.status = nextStatus;
+      }
+ 
       if (generatedText.deepDiveContent) {
         updatePayload.deepDiveContent = generatedText.deepDiveContent;
       } else {
@@ -134,9 +183,9 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
       }
 
       await articleRef.update(updatePayload);
-
+ 
       console.log(`[${articleId}] Process complete! Article is now in status '${nextStatus}'.`);
-
+ 
     } catch (error) {
       console.error(`[${articleId}] An error occurred during content generation:`, error);
       const articleRef = db.collection('articles').doc(articleId);
@@ -299,20 +348,18 @@ export const requeueAllFailedArticles = onCall(
                 // Prepare a batch of tasks for the Task Queue
                 const tasksToEnqueue = chunk.map((doc) => ({ articleId: doc.id }));
 
-                // Prepare a batch of writes for Firestore
+                // Prepare a batch of writes for Firestore to update statuses
                 const firestoreBatch = db.batch();
                 chunk.forEach((doc) => {
                     const docRef = articlesRef.doc(doc.id);
                     firestoreBatch.update(docRef, { status: "Queued", adminRevisionNotes: admin.firestore.FieldValue.delete() });
                 });
 
-                // Enqueue tasks sequentially. The "Queue does not exist" error was likely due to
-                // name resolution issues under load, which using the full function resource name
-                // should have fixed. The bulk enqueue method sends the entire array as a single
-                // task's payload, which our 'processArticle' function isn't designed to handle.
-                for (const task of tasksToEnqueue) {
-                    await queue.enqueue(task);
-                }
+                // Enqueue all tasks for the chunk in a single bulk operation.
+                // This is more efficient than enqueueing one by one in a loop.
+                // The v2 SDK handles an array of task objects correctly, creating
+                // one task for each object in the array.
+                await queue.enqueue(tasksToEnqueue);
 
                 // If enqueueing succeeds, then commit the Firestore status updates.
                 await firestoreBatch.commit();
@@ -376,80 +423,66 @@ export const regenerateArticleContent = onCall({
  * Processes a single discovery configuration to find and save new topic suggestions.
  * @param {object} config The discovery configuration object.
  * @param {GoogleGenAI} ai The GoogleGenAI instance.
- * @param {FirebaseFirestore.Firestore} db The Firestore instance.
+  * @param {FirebaseFirestore.Firestore} db The Firestore instance.
  * @param {object} promptSchema The schema for the AI prompt response.
  */
-async function processDiscoveryConfig(config, ai, db, promptSchema) {
+async function processDiscoveryConfig(config, ai, db, promptSchema, geminiApiKey) { // eslint-disable-line no-unused-vars
     console.log(`Discovering ${config.articleType} for ${config.region}...`);
-        
-    try {
-        // STEP 1: Use Google Search to get grounded, up-to-date information.
-        let searchPrompt;
-        if (config.articleType === 'Positive News') {
-            searchPrompt = `Using Google Search, find 5 distinct and recent uplifting, positive news stories from ${config.region}. For each story, provide a brief summary and its source URL.`;
-        } else if (config.articleType === 'Misinformation') {
-            searchPrompt = `Using Google Search, find 5 distinct and recent examples of widespread misinformation or fake news from ${config.region} that have been debunked by reputable sources. For each, summarize the false claim. Do not include a source URL.`;
-        } else { // Trending Topic
-            searchPrompt = `Using Google Search, find the top 5 distinct trending news topics in ${config.region} right now. Summarize their significance. Do not include a source URL.`;
-        }
 
-        const groundedResponse = await ai.models.generateContent({
+    // 1. Select the correct sources from the registry based on the config.
+    let pillarKey;
+    if (config.articleType === 'Positive News') pillarKey = 'positive_news';
+    else if (config.articleType === 'Trending Topic') pillarKey = 'general_quality_news'; // Map "Trending" to general news sources
+    else if (config.articleType === 'Misinformation') pillarKey = 'misinformation_watch';
+    else return; // Should not happen with current configs
+
+    const regionKey = config.region.toLowerCase() === 'worldwide' ? 'global' : config.region.toLowerCase();
+    const sourcesForPillar = SOURCE_REGISTRY.sources[pillarKey];
+    // Fallback to global sources if region-specific ones don't exist
+    const allowedDomains = sourcesForPillar?.[regionKey]?.allowlist || sourcesForPillar?.global?.allowlist || [];
+
+    if (allowedDomains.length === 0) {
+        console.log(`No sources configured in source-registry.json for ${config.articleType} in ${config.region}. Skipping.`);
+        return;
+    }
+
+    // 2. Construct a single, powerful prompt for discovery.
+    const discoveryPrompt = `
+    Your task is to discover 5 new, distinct, and relevant stories for the content pillar "${config.articleType}" in the region "${config.region}".
+    You MUST strictly adhere to the source policy and only use the provided list of allowed domains.
+    
+    ALLOWED DOMAINS:
+    ${JSON.stringify(allowedDomains)}
+
+    TASK:
+    1.  Use Google Search, creating queries with "site:" filters for the domains listed above.
+    2.  Find stories published or updated in the last 72 hours.
+    3.  For each story, extract the required information and format it into the JSON schema.
+    4.  Ensure stories are unique and not duplicates of each other.
+    5.  For 'Positive News', find uplifting stories. For 'Trending Topic', find globally relevant news. For 'Misinformation', find recently debunked claims.
+    6.  It is critical that you use the EXACT URL from the source. Do not invent, alter, or truncate the URLs.
+    
+    Categories must be from this list: ${JSON.stringify(SUPPORTED_CATEGORIES)}.
+    `;
+
+    try {
+        // 3. Make a single AI call that uses search and returns structured JSON.
+        const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: [{ parts: [{ text: searchPrompt }] }],
+            systemInstruction: { parts: [{ text: GLOBAL_SYSTEM_PROMPT }] },
+            contents: [{ parts: [{ text: discoveryPrompt }] }],
             config: {
                 tools: [{ googleSearch: {} }],
-            },
-        });
-
-        const groundedText = groundedResponse.text;
-        const groundingChunks = groundedResponse.candidates?.[0]?.groundingMetadata?.groundingChunks;
-
-        if (!groundedText) {
-            console.log(`No grounded text returned for ${config.articleType} in ${config.region}. Skipping.`);
-            return;
-        }
-
-        // STEP 2: Use a second call to structure the grounded text into the desired JSON format.
-        let jsonExtractionPrompt;
-        const categoriesString = "['" + SUPPORTED_CATEGORIES.join("', '") + "']";
-        // The Gemini API returns grounding chunks with `web.title` and `web.uri`.
-        // We format these into a string to pass as context to the next prompt.
-        const sourcesInfo = groundingChunks?.map(chunk => `Title: ${chunk.web.title}\nURL: ${chunk.web.uri}`).join('\n\n') || '';
-        
-        if (config.articleType === 'Positive News') {
-            // For Positive News, we must provide the sources so the AI can attribute them correctly.
-            jsonExtractionPrompt = `From the following text and list of sources, extract up to 5 distinct positive news stories. Format them into a JSON object matching the provided schema. For each story, you MUST select the most relevant source URL and title from the 'Sources' list provided below. It is critical that you use the EXACT URL from the sources list. Do not invent, alter, or truncate the URLs. If you cannot find a direct and complete source URL for a story in the provided list, do not include that story in your output.
-Categories must be from this list: ${categoriesString}.
-
-Sources:
-${sourcesInfo}
-
-Text:
-${groundedText}`;
-        } else { // Trending Topic or Misinformation
-            // For other types, source attribution is not required in the same way.
-            jsonExtractionPrompt = `From the following text, extract up to 5 distinct topics. Format them into a JSON object matching the provided schema. The 'sourceUrl' and 'sourceTitle' fields are not required and can be omitted for these types.
-Categories must be from this list: ${categoriesString}.
-
-Text:
-${groundedText}`;
-        }
-        
-        const jsonResponse = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: [{ parts: [{ text: jsonExtractionPrompt }] }],
-            config: {
                 responseMimeType: "application/json",
                 responseSchema: promptSchema,
             },
         });
 
-        const jsonString = jsonResponse.text.trim();
+        const jsonString = response.text.trim();
         const result = JSON.parse(jsonString);
 
         if (result.suggestions && result.suggestions.length > 0) {
-            const batch = db.batch();
-            let newSuggestionCount = 0;
+            let newArticleCount = 0;
  
             const validSuggestions = result.suggestions.filter(suggestion => 
                 suggestion.title && typeof suggestion.title === 'string' && suggestion.title.trim() !== ''
@@ -457,28 +490,49 @@ ${groundedText}`;
 
             if (validSuggestions.length > 0) {
                 const titles = validSuggestions.map(s => s.title);
-                const existingTopicsQuery = db.collection('suggested_topics')
+                // Check against 'articles' collection for duplicates to avoid re-creating content.
+                const existingArticlesQuery = db.collection('articles')
                     .where('title', 'in', titles)
                     .where('region', '==', config.region)
                     .where('articleType', '==', config.articleType);
 
-                const existingTopicsSnapshot = await existingTopicsQuery.get();
-                const existingTitles = new Set(existingTopicsSnapshot.docs.map(doc => doc.data().title));
+                const existingArticlesSnapshot = await existingArticlesQuery.get();
+                const existingTitles = new Set(existingArticlesSnapshot.docs.map(doc => doc.data().title));
 
                 for (const suggestion of validSuggestions) {
-                    if (existingTitles.has(suggestion.title)) continue;
+                    if (existingTitles.has(suggestion.title)) {
+                        console.log(`[Discovery] Skipping duplicate article: "${suggestion.title}"`);
+                        continue;
+                    }
 
-                    const newSuggestionRef = db.collection('suggested_topics').doc();
-                    batch.set(newSuggestionRef, { ...suggestion, articleType: config.articleType, region: config.region, createdAt: admin.firestore.FieldValue.serverTimestamp() });
-                    newSuggestionCount++;
+                    // Create a new article document and immediately trigger its generation.
+                    const newArticleRef = db.collection('articles').doc();
+                    const articleData = {
+                        title: suggestion.title,
+                        articleType: config.articleType,
+                        categories: suggestion.categories || [],
+                        region: config.region,
+                        shortDescription: suggestion.shortDescription,
+                        status: 'Generating', // A temporary status while we call the generation logic.
+                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                        discoveredAt: admin.firestore.FieldValue.serverTimestamp(),
+                        sourceUrl: suggestion.sourceUrl || null,
+                        sourceTitle: suggestion.sourceTitle || null,
+                    };
+
+                    await newArticleRef.set(articleData);
+                    console.log(`[${newArticleRef.id}] Created new article document for "${suggestion.title}". Now generating content...`);
+
+                    // Directly call the generation logic.
+                    await performContentGeneration(newArticleRef.id, articleData, geminiApiKey);
+                    newArticleCount++;
                 }
             }
 
-            if (newSuggestionCount > 0) {
-                await batch.commit();
-                console.log(`Added ${newSuggestionCount} new suggestions for ${config.articleType} in ${config.region}.`);
+            if (newArticleCount > 0) {
+                console.log(`Successfully discovered and generated content for ${newArticleCount} new articles for ${config.articleType} in ${config.region}.`);
             } else {
-                console.log(`No new, unique suggestions found for ${config.articleType} in ${config.region}.`);
+                console.log(`No new, unique articles were generated for ${config.articleType} in ${config.region}.`);
             }
         }
     } catch (error) {
@@ -490,10 +544,10 @@ ${groundedText}`;
 
 /**
  * This scheduled Cloud Function runs every 6 hours to automatically discover trending topics
- * and positive news stories using a search-grounded AI model.
+  * and positive news stories using a search-grounded AI model.
  */
 export const discoverTopics = onSchedule({
-    schedule: "every 6 hours",
+    schedule: "every 24 hours",
     region: "europe-west1",
     secrets: ["GEMINI_API_KEY"],
 }, async (event) => {
@@ -541,7 +595,7 @@ export const discoverTopics = onSchedule({
     
     // We can process these in parallel to speed up the discovery process.
     const discoveryPromises = discoveryConfigs.map(config => 
-        processDiscoveryConfig(config, ai, db, promptSchema)
+        processDiscoveryConfig(config, ai, db, promptSchema, geminiApiKey)
     );
 
     const results = await Promise.allSettled(discoveryPromises);

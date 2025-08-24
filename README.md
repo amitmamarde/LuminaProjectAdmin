@@ -28,40 +28,44 @@ The frontend is a web application that allows users (admins and experts) to inte
 -   **Key Features:**
     -   View and manage a list of AI-suggested topics.
     -   Create new article drafts from suggestions or from scratch.
-    -   Review, edit, and approve AI-generated article content.
+    -   Review, edit, and approve AI-generated article content in a multi-step workflow.
     -   Publish final articles to the platform.
 
-### Backend Cloud Function: `generateArticleContent`
+### Backend Cloud Functions: `generateArticleContent` & `processArticle`
 
-This function automates the creation of article content.
+This pair of functions creates a robust, queue-based system for generating article content. This decouples the initial trigger from the long-running AI generation task, improving reliability and scalability.
 
 -   **File:** `functions/index.js`
--   **Purpose:** To take a simple article draft (containing just a title and metadata) and generate a full-fledged article using AI.
--   **Trigger:** Fires automatically when a new document is created in the `articles` collection in Firestore.
+-   **Purpose:** To take a simple article draft (created via the admin UI) and generate a full-fledged article using AI.
+
+#### `generateArticleContent` (Dispatcher)
+-   **Trigger:** `onDocumentCreated` - Fires automatically when a new document is created in the `articles` collection.
 -   **Workflow:**
-    1.  **Reads from Firestore:** Gets the `title`, `categories`, `shortDescription`, and `articleType` from the newly created article document.
-    2.  **Validates Input:** Ensures the article's status is `Draft` before proceeding.
-    3.  **Generates AI Prompt:** Constructs a detailed, context-aware prompt for the Gemini API. The persona of the AI is adjusted based on the `articleType` (e.g., "optimistic storyteller" for 'Positive News').
-    4.  **Calls Gemini API:** Sends the prompt to the `gemini-2.5-flash` model, requesting a structured JSON response.
-    5.  **Receives Structured Output:** The AI returns a JSON object containing:
-        -   `flashContent`: A short, engaging summary.
-        -   `deepDiveContent`: A longer, detailed article body formatted with clean HTML.
-        -   `imagePrompt`: A descriptive prompt for an AI image generator.
-    6.  **Writes to Firestore:** Updates the article document with the generated content and changes its status to `AwaitingAdminReview` or `AwaitingExpertReview`, pushing it to the next step in the human review process.
+    1.  **Validates Input:** Checks if the new article has a status of `Draft`.
+    2.  **Enqueues Task:** Adds a task to a Cloud Tasks queue. The task payload contains the `articleId`.
+    3.  **Updates Status:** Changes the article's status to `Queued` to provide immediate UI feedback and prevent duplicate processing.
+
+#### `processArticle` (Worker)
+-   **Trigger:** `onTaskDispatched` - Fires when a task is received from the Cloud Tasks queue.
+-   **Workflow:**
+    1.  **Receives Task:** Gets the `articleId` from the task payload.
+    2.  **Fetches Data:** Reads the full article document from Firestore.
+    3.  **Calls Core Logic:** Invokes the `performContentGeneration` helper function, which contains the logic for building the AI prompt, calling the Gemini API, and parsing the response.
+    4.  **Writes to Firestore:** `performContentGeneration` updates the article document with the generated content and sets its new status (e.g., `Published` or `AwaitingExpertReview`).
 
 ### Backend Cloud Function: `discoverTopics`
 
 This function acts as an automated content scout, finding new potential article ideas.
 
 -   **File:** `functions/index.js`
--   **Purpose:** To periodically find new trending topics and positive news stories from across the web.
--   **Trigger:** Runs on a fixed schedule (every 6 hours).
+-   **Purpose:** To periodically find new trending topics, positive news, and misinformation claims from vetted sources.
+-   **Trigger:** Runs on a fixed schedule (every 24 hours).
 -   **Workflow:**
-    1.  **Iterates Discovery Jobs:** Loops through a list of configurations, targeting different regions (Worldwide, USA, India, etc.) and article types.
-    2.  **Performs Grounded Search:** For each job, it uses the Gemini API's `googleSearch` tool to find recent, relevant online content. This ensures the suggestions are timely and based on real-world information.
-    3.  **Extracts and Structures Data:** A second AI call processes the raw search results, extracting key information and formatting it into a clean JSON structure (title, description, categories, source URL).
-    4.  **Prevents Duplicates:** Before saving, it queries the `suggested_topics` collection in Firestore to ensure the same topic has not already been suggested for that region and type.
-    5.  **Writes to Firestore:** New, unique topics are saved as documents in the `suggested_topics` collection, where they appear in the admin portal for review.
+    1.  **Iterates Discovery Jobs:** Loops through a list of configurations, targeting different regions (Worldwide, USA, India, etc.) and article types ('Positive News', 'Misinformation', etc.).
+    2.  **Performs Constrained Search:** For each job, it constructs a detailed prompt that instructs the Gemini API to search *only* within a pre-approved list of websites defined in `source-registry.json`. This ensures all discovered content comes from high-quality, vetted sources.
+    3.  **Extracts and Structures Data:** The AI uses its `googleSearch` tool with the source constraints and returns a clean JSON structure containing the story title, description, categories, and the exact source URL.
+    4.  **Prevents Duplicates:** Before creating a new article, it queries the `articles` collection to ensure an article with the same title, region, and type doesn't already exist.
+    5.  **Creates and Generates Article:** For each new, unique topic, it creates a new document in the `articles` collection. It then **directly calls** the `performContentGeneration` logic to write the content in the same execution, fully automating the pipeline from discovery to a draft ready for review or auto-publication. This bypasses the task queue to ensure discovered content is processed immediately.
 
 ---
 

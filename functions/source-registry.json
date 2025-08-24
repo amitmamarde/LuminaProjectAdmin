@@ -1,0 +1,172 @@
+{
+  "version": "2025-08-22",
+  "sources": {
+    "positive_news": {
+      "global": {
+        "allowlist": [
+          "goodnewsnetwork.org",
+          "positive.news",
+          "reasonstobecheerful.world",
+          "goodgoodgood.co",
+          "optimistdaily.com",
+          "huffpost.com/section/good-news"
+        ]
+      },
+      "india": {
+        "allowlist": [
+          "thebetterindia.com",
+          "indianexpress.com/good-news",
+          "timesofindia.indiatimes.com/good-news"
+        ]
+      },
+      "europe": {
+        "allowlist": [
+          "bbc.com/news",
+          "euronews.com/next",
+          "theguardian.com/world/series/the-upside"
+        ]
+      },
+      "usa": {
+        "allowlist": [
+            "sunnyskyz.com",
+            "today.com/good-news",
+            "usatoday.com/news/good-news"
+        ]
+      }
+    },
+    "research_breakthroughs": {
+      "global": {
+        "allowlist": [
+          "futurity.org",
+          "theconversation.com",
+          "sciencedaily.com",
+          "eurekalert.org",
+          "who.int/news",
+          "un.org/news",
+          "nasa.gov/news",
+          "esa.int/news",
+          "nih.gov/news",
+          "nature.com/news",
+          "sciencemag.org/news",
+          "arxiv.org",
+          "medrxiv.org",
+          "biorxiv.org"
+        ],
+        "notes": "For preprints (arXiv/medRxiv/bioRxiv), add disclaimers; prefer peer-reviewed follow-ups where available."
+      },
+      "india": {
+        "allowlist": [
+          "isro.gov.in/Press_Release",
+          "dst.gov.in/whats-new",
+          "dbtindia.gov.in/whats-new",
+          "icmr.gov.in",
+          "iitm.ac.in",
+          "iitb.ac.in",
+          "iitd.ac.in",
+          "iisc.ac.in/news",
+          "csir.res.in"
+        ]
+      },
+      "europe": {
+        "allowlist": [
+          "ec.europa.eu/research-and-innovation",
+          "erc.europa.eu/news-events",
+          "ukri.org/news",
+          "maxplanck.org/news",
+          "cnrs.fr/en/cnrs-magazine",
+          "helmholtz.de/en/newsroom",
+          "ox.ac.uk/news",
+          "cam.ac.uk/news",
+          "ethz.ch/en/news-and-events",
+          "imperial.ac.uk/news"
+        ]
+      },
+      "usa": {
+        "allowlist": [
+            "news.mit.edu",
+            "stanford.edu/news",
+            "news.harvard.edu/gazette",
+            "caltech.edu/news"
+        ]
+      }
+    },
+    "general_quality_news": {
+      "global": {
+        "allowlist": [
+          "reuters.com",
+          "apnews.com",
+          "bbc.com/news",
+          "npr.org/sections/news",
+          "aljazeera.com/news"
+        ],
+        "notes": "Use only when story is demonstrably positive/solutions-oriented or globally relevant."
+      },
+      "india": {
+        "allowlist": [
+            "thehindu.com",
+            "indianexpress.com",
+            "timesofindia.indiatimes.com"
+        ]
+      },
+      "europe": {
+        "allowlist": [
+            "theguardian.com/world",
+            "dw.com/en/top-stories/s-9097",
+            "france24.com/en"
+        ]
+      },
+      "usa": {
+        "allowlist": [
+            "nytimes.com",
+            "wsj.com",
+            "washingtonpost.com"
+        ]
+      }
+    },
+    "misinformation_watch": {
+      "global": {
+        "allowlist": [
+          "ifcncodeofprinciples.poynter.org",
+          "factcheck.org",
+          "apnews.com/hub/fact-checking",
+          "reuters.com/fact-check",
+          "snopes.com",
+          "fullfact.org",
+          "politifact.com",
+          "afp.com/fact-check",
+          "euvsdisinfo.eu"
+        ]
+      },
+      "india": {
+        "allowlist": [
+          "altnews.in",
+          "boomlive.in",
+          "factly.in",
+          "indiatoday.in/fact-check",
+          "thequint.com/fit/webqoof"
+        ]
+      },
+      "europe": {
+        "allowlist": [
+          "dpa-factchecking.com",
+          "ellinikahoaxes.gr",
+          "maldita.es",
+          "correctiv.org/faktencheck",
+          "lesdecodeurs.fr"
+        ]
+      },
+      "usa": {
+        "allowlist": [
+            "factcheck.org",
+            "politifact.com",
+            "snopes.com",
+            "washingtonpost.com/news/fact-checker"
+        ]
+      }
+    }
+  },
+  "search_fallback": {
+    "allow_public_search": true,
+    "rule": "ONLY with site: filters composed from the relevant allowlist"
+  }
+}
