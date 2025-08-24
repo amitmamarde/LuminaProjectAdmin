@@ -43,6 +43,7 @@ const CATEGORIES = [
   'Digital & Media Literacy', 'Business & Finance', 'Environment & Sustainability',
   'Education & Learning', 'Arts, Media & Creativity'
 ];
+const ARTICLE_TYPES: ArticleType[] = ['Trending Topic', 'Positive News', 'Misinformation'];
 const REGIONS = ['Worldwide', 'USA', 'India', 'Europe'];
 
 // --- Authentication Context ---
@@ -191,14 +192,14 @@ const HomePage: React.FC = () => {
                     {contentLoading ? <Spinner /> : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                             {latestArticles.map(article => (
-                                <Link to={`/view/${article.id}`} key={article.id} className="block bg-brand-surface rounded-lg shadow-md hover:shadow-2xl transition-shadow duration-300 overflow-hidden group">
+                                <a href={article.articleType === 'Misinformation' ? `#/view/${article.id}` : article.sourceUrl} target={article.articleType === 'Misinformation' ? '_self' : '_blank'} rel="noopener noreferrer" key={article.id} className="block bg-brand-surface rounded-lg shadow-md hover:shadow-2xl transition-shadow duration-300 overflow-hidden group">
                                     {article.imageUrl && <img src={article.imageUrl} alt={article.title} className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"/>}
                                     <div className="p-6">
                                         <p className="text-sm text-brand-primary font-semibold mb-2">{article.categories.join(', ')}</p>
                                         <h3 className="text-xl font-bold text-brand-text-primary mb-3">{article.title}</h3>
                                         <p className="text-brand-text-secondary text-sm">{article.flashContent?.substring(0, 100)}...</p>
                                     </div>
-                                </Link>
+                                </a>
                             ))}
                         </div>
                     )}
@@ -249,9 +250,9 @@ const ArticleFeedPage: React.FC = () => {
                                 </div>
                             )}
                         </div>
-                        <Link to={`/view/${article.id}`} className="mt-auto bg-white text-brand-text-primary font-bold py-3 px-8 rounded-full hover:bg-gray-200 transition-transform transform hover:scale-105">
-                            Read Full Story
-                        </Link>
+                        <a href={article.articleType === 'Misinformation' ? `#/view/${article.id}` : article.sourceUrl} target={article.articleType === 'Misinformation' ? '_self' : '_blank'} rel="noopener noreferrer" className="mt-auto bg-white text-brand-text-primary font-bold py-3 px-8 rounded-full hover:bg-gray-200 transition-transform transform hover:scale-105">
+                            {article.articleType === 'Misinformation' ? 'Read Full Story' : 'Read at Source'}
+                        </a>
                     </div>
                 </section>
             ))}
@@ -284,6 +285,13 @@ const PublicArticleView: React.FC = () => {
     if (loading) return <div className="h-screen w-screen flex items-center justify-center"><Spinner /></div>;
     if (!article) return <div className="text-center py-20"><h1>Article not found or not published.</h1><Link to="/" className="text-brand-primary hover:underline">Go Home</Link></div>;
 
+    // For non-misinformation articles, the deep dive is not on our site.
+    // This view primarily serves to display the full content of "Misinformation" articles.
+    // For other types, we show the summary and a clear link to the source.
+    const hasDeepDive = article.articleType === 'Misinformation' && article.deepDiveContent;
+    const sourceLinkText = article.sourceTitle || 'Read original article';
+    const sourceLink = article.sourceUrl ? <a href={article.sourceUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-primary hover:underline">{sourceLinkText}</a> : null;
+
     return (
         <div className="bg-brand-background min-h-screen">
              <PublicHeader />
@@ -296,19 +304,25 @@ const PublicArticleView: React.FC = () => {
                         Published on {article.publishedAt?.toDate().toLocaleDateString()}
                         {article.expertShowNameToPublic && article.expertDisplayName && ` • Verified by ${article.expertDisplayName}`}
                     </div>
-                    {article.articleType === 'Positive News' && article.sourceUrl && (
+
+                    {hasDeepDive ? (
+                        <div
+                            className="prose prose-lg max-w-none prose-h2:text-brand-text-primary prose-h2:border-b prose-h2:pb-2 prose-strong:text-brand-text-primary"
+                            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(article.deepDiveContent || '') }}
+                        />
+                    ) : (
                         <div className="mb-6 bg-gray-100 p-4 rounded-lg border border-gray-200">
-                            <p className="text-sm text-brand-text-secondary">
-                                This article is based on a story from an external source.
-                                <br />
-                                <strong>Source:</strong> <a href={article.sourceUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-primary hover:underline">{article.sourceTitle || 'Read original article'}</a>
-                            </p>
+                             <h2 className="text-2xl font-bold text-brand-text-primary mb-4">Lumina Flash</h2>
+                             <p className="text-lg text-brand-text-secondary mb-4">{article.flashContent}</p>
+                             {sourceLink && (
+                                <p className="text-brand-text-secondary">
+                                    This is a summary of a story from an external source.
+                                    <br />
+                                    <strong>Source:</strong> {sourceLink}
+                                </p>
+                             )}
                         </div>
                     )}
-                    <div
-                        className="prose prose-lg max-w-none prose-h2:text-brand-text-primary prose-h2:border-b prose-h2:pb-2 prose-strong:text-brand-text-primary"
-                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(article.deepDiveContent || '') }}
-                    />
                 </div>
              </article>
         </div>
@@ -676,8 +690,9 @@ const ArticleListPage: React.FC = () => {
                             <label className="block text-sm font-medium text-brand-text-secondary mb-1">Filter by Type</label>
                             <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-primary">
                                 <option value="all">All Types</option>
-                                <option value="Trending Topic">Trending Topic</option>
-                                <option value="Positive News">Positive News</option>
+                                {ARTICLE_TYPES.map(type => (
+                                    <option key={type} value={type}>{type}</option>
+                                ))}
                             </select>
                         </div>
                     </div>
@@ -794,8 +809,9 @@ const TaskListPage: React.FC<{ mode: 'my-tasks' | 'admin-review' }> = ({ mode })
                             <label className="block text-sm font-medium text-brand-text-secondary mb-1">Filter by Type</label>
                             <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-primary">
                                 <option value="all">All Types</option>
-                                <option value="Trending Topic">Trending Topic</option>
-                                <option value="Positive News">Positive News</option>
+                                {ARTICLE_TYPES.map(type => (
+                                    <option key={type} value={type}>{type}</option>
+                                ))}
                             </select>
                         </div>
                     </div>
@@ -1089,8 +1105,9 @@ const ArticleEditorPage: React.FC = () => {
                         <div>
                             <label htmlFor="articleType" className="block text-sm font-medium text-brand-text-secondary mb-1">Article Type</label>
                             <select id="articleType" value={article.articleType} onChange={e => setArticle(p => ({...p, articleType: e.target.value as ArticleType}))} disabled={!canEditCore} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-primary disabled:bg-gray-100">
-                                <option value="Trending Topic">Trending Topic</option>
-                                <option value="Positive News">Positive News</option>
+                                {ARTICLE_TYPES.map(type => (
+                                    <option key={type} value={type}>{type}</option>
+                                ))}
                             </select>
                         </div>
                         <div>
@@ -1155,10 +1172,12 @@ const ArticleEditorPage: React.FC = () => {
                             <label htmlFor="flashContent" className="block text-sm font-bold text-brand-text-secondary mb-1">Lumina Flash (Summary)</label>
                             <textarea id="flashContent" value={article.flashContent || ''} onChange={e => setArticle(p => ({ ...p, flashContent: e.target.value }))} disabled={!canEditContent} rows={4} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-primary disabled:bg-gray-100" />
                         </div>
-                        <div>
-                            <label className="block text-sm font-bold text-brand-text-secondary mb-1">Deep Dive (Full Article)</label>
-                            <ReactQuill theme="snow" value={article.deepDiveContent || ''} onChange={value => setArticle(p => ({ ...p, deepDiveContent: value }))} readOnly={!canEditContent} modules={quillModules} />
-                        </div>
+                        {article.articleType === 'Misinformation' && (
+                            <div>
+                                <label className="block text-sm font-bold text-brand-text-secondary mb-1">Deep Dive (Full Article)</label>
+                                <ReactQuill theme="snow" value={article.deepDiveContent || ''} onChange={value => setArticle(p => ({ ...p, deepDiveContent: value }))} readOnly={!canEditContent} modules={quillModules} />
+                            </div>
+                        )}
                          {/* Action Buttons */}
                         <div className="pt-6 border-t mt-6 flex flex-wrap gap-4 justify-end items-center">
                             {canEditContent && (
@@ -1385,8 +1404,9 @@ const TopicDiscoveryPage: React.FC = () => {
                             <label className="block text-sm font-medium text-brand-text-secondary mb-1">Filter by Type</label>
                             <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-primary">
                                 <option value="all">All Types</option>
-                                <option value="Trending Topic">Trending Topic</option>
-                                <option value="Positive News">Positive News</option>
+                                {ARTICLE_TYPES.map(type => (
+                                    <option key={type} value={type}>{type}</option>
+                                ))}
                             </select>
                         </div>
                         <div>

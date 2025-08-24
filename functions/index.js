@@ -32,66 +32,108 @@ const SUPPORTED_CATEGORIES = [
  * @param {string} geminiApiKey The Gemini API key.
  */
 async function performContentGeneration(articleId, data, geminiApiKey) {
-    console.log(`[${articleId}] Starting content generation for: "${data.title}"`);
+    console.log(`[${articleId}] Starting content generation for: "${data.title}" of type "${data.articleType}"`);
     
     const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-    const { title, categories, shortDescription, articleType } = data;
+    const { title, categories, shortDescription, articleType, sourceUrl } = data;
 
     try {
-      console.log(`[${articleId}] Calling Gemini API for text content.`);
-      
       const categoriesText = categories.join(', ');
       const descriptionText = shortDescription ? `The user has also provided this short description for additional context: "${shortDescription}".` : '';
 
-      let promptPersona;
-      if (articleType === 'Positive News') {
-        promptPersona = `You are an optimistic storyteller for "Lumina Positive News". Your task is to craft an uplifting and inspiring narrative about the topic: "${title}" in the categories "${categoriesText}". Focus on the positive aspects, human spirit, and hopeful outcomes.`;
-      } else { // Default to 'Trending Topic'
-        promptPersona = `You are a neutral, objective journalist for the "Lumina Content Platform". Your task is to validate and explain the trending topic: "${title}" in the categories "${categoriesText}". Your goal is to provide a balanced, factual, and easy-to-understand overview.`;
+      let promptPersona, responseSchema, textPrompt;
+
+      // --- Define prompts and schemas based on Article Type ---
+      
+      // For Trending and Positive news, we only generate a summary as we link to the source.
+      if (articleType === 'Trending Topic' || articleType === 'Positive News') {
+        console.log(`[${articleId}] Generating summary-only content for a '${articleType}' article.`);
+        
+        const sourceContext = sourceUrl ? `The original story can be found at ${sourceUrl}.` : '';
+        
+        promptPersona = articleType === 'Positive News'
+          ? `You are an optimistic storyteller for "Lumina Positive News". Your task is to craft an uplifting and inspiring summary (60-100 words) about the topic: "${title}" in the categories "${categoriesText}". ${sourceContext} Focus on the positive aspects, human spirit, and hopeful outcomes.`
+          : `You are a neutral, objective journalist for the "Lumina Content Platform". Your task is to validate and summarize the trending topic: "${title}" in the categories "${categoriesText}". ${sourceContext} Your goal is to provide a balanced, factual, and easy-to-understand summary of 60-100 words.`;
+
+        textPrompt = `${promptPersona}
+        ${descriptionText}
+        Please provide your response in a single, minified JSON object with two specific keys:
+          1. "flashContent": The concise, factual summary of 60-100 words. This is the "Lumina Flash".
+          2. "imagePrompt": A vivid, descriptive text prompt for an AI image generator to create a symbolic, non-controversial image representing the topic.
+        Do not include any other text or explanations outside of the single JSON object.`;
+
+        responseSchema = {
+          type: Type.OBJECT,
+          properties: {
+            flashContent: { type: Type.STRING },
+            imagePrompt: { type: Type.STRING },
+          },
+          required: ["flashContent", "imagePrompt"],
+        };
+
+      // For Misinformation, we generate a full deep dive.
+      } else if (articleType === 'Misinformation') {
+        console.log(`[${articleId}] Generating full deep-dive content for a 'Misinformation' article.`);
+        promptPersona = `You are a neutral, objective fact-checker for the "Lumina Content Platform". Your task is to analyze and debunk the misinformation topic: "${title}" in the categories "${categoriesText}". Your goal is to provide a clear, evidence-based, and easy-to-understand explanation that clarifies the facts without being preachy or condescending.`;
+
+        textPrompt = `${promptPersona}
+        ${descriptionText}
+        Please provide your response in a single, minified JSON object with three specific keys:
+          1. "flashContent": A concise, factual summary of 60-100 words that quickly debunks the misinformation. This is the "Lumina Flash".
+          2. "deepDiveContent": A detailed, neutral explanation of 500-700 words that breaks down the misinformation, presents the facts with evidence, and explains the context. This is the "Deep Dive". This content MUST be formatted using simple, clean HTML for readability. Use headings (e.g., <h2>Key Points</h2>), bold text (e.g., <strong>important term</strong>), paragraphs (e.g., <p>text</p>), and unordered lists (e.g., <ul><li>list item</li></ul>) where appropriate. To make the article scannable and visually appealing for web readers, please use shorter paragraphs with clear spacing. Do not use H1 headings. Start with a paragraph, not a heading.
+          3. "imagePrompt": A vivid, descriptive text prompt for an AI image generator to create a symbolic, neutral image representing the concept of truth or clarity, avoiding any imagery from the misinformation itself. For example: "A magnifying glass focusing on a single glowing particle of truth amidst a sea of distorted, blurry shapes."
+        Do not include any other text or explanations outside of the single JSON object.`;
+
+        responseSchema = {
+          type: Type.OBJECT,
+          properties: {
+            flashContent: { type: Type.STRING },
+            deepDiveContent: { type: Type.STRING },
+            imagePrompt: { type: Type.STRING },
+          },
+          required: ["flashContent", "deepDiveContent", "imagePrompt"],
+        };
+      } else {
+        throw new Error(`Unsupported article type: ${articleType}`);
       }
 
-      const textPrompt = `${promptPersona}
-      ${descriptionText}
-
-      Please provide your response in a single, minified JSON object with three specific keys:
-        1. "flashContent": A concise, factual summary of 60-100 words. This is the "Lumina Flash". For "Positive News", make this summary engaging and uplifting.
-      2. "deepDiveContent": A detailed, neutral explanation of 500-700 words. This is the "Deep Dive". This content MUST be formatted using simple, clean HTML for readability. Use headings (e.g., <h2>Key Points</h2>), bold text (e.g., <strong>important term</strong>), paragraphs (e.g., <p>text</p>), and unordered lists (e.g., <ul><li>list item</li></ul>) where appropriate. To make the article scannable and visually appealing for web readers, please use shorter paragraphs with clear spacing. Do not use H1 headings. Start with a paragraph, not a heading.
-      3. "imagePrompt": A vivid, descriptive text prompt (not a URL) for an AI image generator to create a symbolic, non-controversial image representing the topic. For "Positive News", this should be an inspiring and positive image prompt. For example: "A diverse group of people planting a vibrant, glowing tree on a hill overlooking a sunrise."
-      
-      Do not include any other text or explanations outside of the single JSON object.`;
-
+      console.log(`[${articleId}] Calling Gemini API...`);
       const textResponse = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
           contents: [{ parts: [{ text: textPrompt }] }],
         config: {
           responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              flashContent: { type: Type.STRING },
-              deepDiveContent: { type: Type.STRING },
-              imagePrompt: { type: Type.STRING },
-            },
-            required: ["flashContent", "deepDiveContent", "imagePrompt"],
-          },
+          responseSchema: responseSchema,
         },
       });
 
       const jsonString = textResponse.text.trim();
       const generatedText = JSON.parse(jsonString);
-        console.log(`[${articleId}] Successfully generated text content.`);
+      console.log(`[${articleId}] Successfully generated content from API.`);
 
       const articleRef = db.collection('articles').doc(articleId);
+      
+      // Positive News goes straight to Admin review.
+      // Trending Topics and Misinformation go to an Expert first.
       const nextStatus = articleType === 'Positive News' ? 'AwaitingAdminReview' : 'AwaitingExpertReview';
 
-      await articleRef.update({
-          flashContent: generatedText.flashContent,
-        deepDiveContent: generatedText.deepDiveContent,
+      // Build the update payload based on what was generated
+      const updatePayload = {
+        flashContent: generatedText.flashContent,
         imagePrompt: generatedText.imagePrompt,
         status: nextStatus,
         // Clear any previous revision notes upon successful regeneration
         adminRevisionNotes: admin.firestore.FieldValue.delete(),
-      });
+      };
+
+      if (generatedText.deepDiveContent) {
+        updatePayload.deepDiveContent = generatedText.deepDiveContent;
+      } else {
+        // Explicitly remove deepDiveContent if it wasn't generated to keep data clean.
+        updatePayload.deepDiveContent = admin.firestore.FieldValue.delete();
+      }
+
+      await articleRef.update(updatePayload);
 
       console.log(`[${articleId}] Process complete! Article is now in status '${nextStatus}'.`);
 
@@ -345,8 +387,10 @@ async function processDiscoveryConfig(config, ai, db, promptSchema) {
         let searchPrompt;
         if (config.articleType === 'Positive News') {
             searchPrompt = `Using Google Search, find 5 distinct and recent uplifting, positive news stories from ${config.region}. For each story, provide a brief summary and its source URL.`;
+        } else if (config.articleType === 'Misinformation') {
+            searchPrompt = `Using Google Search, find 5 distinct and recent examples of widespread misinformation or fake news from ${config.region} that have been debunked by reputable sources. For each, summarize the false claim. Do not include a source URL.`;
         } else { // Trending Topic
-            searchPrompt = `Using Google Search, find the top 5 distinct trending news topics in ${config.region} right now. Summarize their significance.`;
+            searchPrompt = `Using Google Search, find the top 5 distinct trending news topics in ${config.region} right now. Summarize their significance. Do not include a source URL.`;
         }
 
         const groundedResponse = await ai.models.generateContent({
@@ -367,10 +411,13 @@ async function processDiscoveryConfig(config, ai, db, promptSchema) {
 
         // STEP 2: Use a second call to structure the grounded text into the desired JSON format.
         let jsonExtractionPrompt;
-        const sourcesInfo = groundingChunks?.map(chunk => `Title: "${chunk.web.title}", URL: "${chunk.web.uri}"`).join('\n') || 'No sources provided.';
         const categoriesString = "['" + SUPPORTED_CATEGORIES.join("', '") + "']";
+        // The Gemini API returns grounding chunks with `web.title` and `web.uri`.
+        // We format these into a string to pass as context to the next prompt.
+        const sourcesInfo = groundingChunks?.map(chunk => `Title: ${chunk.web.title}\nURL: ${chunk.web.uri}`).join('\n\n') || '';
         
         if (config.articleType === 'Positive News') {
+            // For Positive News, we must provide the sources so the AI can attribute them correctly.
             jsonExtractionPrompt = `From the following text and list of sources, extract up to 5 distinct positive news stories. Format them into a JSON object matching the provided schema. For each story, you MUST select the most relevant source URL and title from the 'Sources' list provided below. It is critical that you use the EXACT URL from the sources list. Do not invent, alter, or truncate the URLs. If you cannot find a direct and complete source URL for a story in the provided list, do not include that story in your output.
 Categories must be from this list: ${categoriesString}.
 
@@ -379,8 +426,9 @@ ${sourcesInfo}
 
 Text:
 ${groundedText}`;
-        } else { // Trending Topic
-            jsonExtractionPrompt = `From the following text, extract up to 5 distinct trending topics. Format them into a JSON object matching the provided schema. The 'sourceUrl' and 'sourceTitle' fields are not required and can be omitted.
+        } else { // Trending Topic or Misinformation
+            // For other types, source attribution is not required in the same way.
+            jsonExtractionPrompt = `From the following text, extract up to 5 distinct topics. Format them into a JSON object matching the provided schema. The 'sourceUrl' and 'sourceTitle' fields are not required and can be omitted for these types.
 Categories must be from this list: ${categoriesString}.
 
 Text:
@@ -467,6 +515,7 @@ export const discoverTopics = onSchedule({
         { articleType: 'Positive News', region: 'USA' },
         { articleType: 'Positive News', region: 'India' },
         { articleType: 'Positive News', region: 'Europe' },
+        { articleType: 'Misinformation', region: 'Worldwide' },
     ];
 
     const promptSchema = {

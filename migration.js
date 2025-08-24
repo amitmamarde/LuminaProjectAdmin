@@ -16,33 +16,42 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-async function migrateArticleStatus() {
-  console.log('Starting migration to change article status from "Queued" back to "GenerationFailed"');
+async function deleteQueuedArticles() {
+  console.log('Starting process to DELETE all articles with "Queued" status.');
+
+  // Safety check: require a command-line argument to proceed with deletion.
+  const args = process.argv.slice(2);
+  if (!args.includes('--confirm-delete')) {
+    console.error('\nERROR: This is a destructive operation.');
+    console.error('To proceed, you must run the script with the --confirm-delete flag:');
+    console.error('node migration.js --confirm-delete');
+    return;
+  }
 
   const articlesRef = db.collection('articles');
   const snapshot = await articlesRef.where('status', '==', 'Queued').get();
 
   if (snapshot.empty) {
-    console.log('No articles with status "Queued" found. Nothing to do.');
+    console.log('\nNo articles with status "Queued" found. Nothing to do.');
     return;
   }
 
-  // Use a write batch to update all documents in a single operation
+  // Use a write batch to delete all documents in a single operation
   const batch = db.batch();
   let count = 0;
 
   snapshot.forEach(doc => {
-    console.log(`  - Scheduling update for article: ${doc.id}`);
+    console.log(`  - Scheduling deletion for article: ${doc.id}`);
     const docRef = articlesRef.doc(doc.id);
-    batch.update(docRef, { status: 'GenerationFailed' });
+    batch.delete(docRef);
     count++;
   });
 
   // Commit the batch
   await batch.commit();
-  console.log(`\nMigration complete. Successfully updated ${count} articles.`);
+  console.log(`\nProcess complete. Successfully deleted ${count} articles.`);
 }
 
-migrateArticleStatus().catch(error => {
-    console.error("An error occurred during migration:", error);
+deleteQueuedArticles().catch(error => {
+    console.error("An error occurred during the deletion process:", error);
 });

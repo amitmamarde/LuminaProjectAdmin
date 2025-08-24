@@ -2,6 +2,7 @@ import type { Timestamp } from 'firebase/firestore';
 
 export enum ArticleStatus {
   Draft = 'Draft',
+  Queued = 'Queued',
   GenerationFailed = 'GenerationFailed',
   AwaitingExpertReview = 'AwaitingExpertReview',
   AwaitingAdminReview = 'AwaitingAdminReview',
@@ -9,7 +10,7 @@ export enum ArticleStatus {
   Published = 'Published',
 }
 
-export type ArticleType = 'Trending Topic' | 'Positive News';
+export type ArticleType = 'Trending Topic' | 'Positive News' | 'Misinformation';
 
 export interface UserProfile {
   uid: string;
