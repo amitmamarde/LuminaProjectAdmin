@@ -877,22 +877,6 @@ const ArticleEditorPage: React.FC = () => {
         ],
     }), []);
 
-    const fetchArticle = useCallback(async () => {
-        if (!id) return;
-        setLoading(true);
-        const docRef = doc(db, 'articles', id);
-        const docSnap = await getDoc(docRef);
-
-        if (docSnap.exists()) {
-            const fetchedArticle = { id: docSnap.id, ...docSnap.data() } as Article;
-            setArticle(fetchedArticle);
-            setSelectedExpertId(fetchedArticle.expertId || '');
-        } else {
-            setError('Article not found.');
-        }
-        setLoading(false);
-    }, [id]);
-
     useEffect(() => {
         if (userData?.role === 'Admin') {
             const fetchExperts = async () => {
@@ -909,8 +893,30 @@ const ArticleEditorPage: React.FC = () => {
             setLoading(false);
             return;
         }
-        fetchArticle();
-    }, [id, isNewArticle, fetchArticle]);
+        if (!id) return;
+
+        // Use onSnapshot for real-time updates. This will automatically refresh the
+        // UI when the backend function updates the article's status or content.
+        const docRef = doc(db, 'articles', id);
+        const unsubscribe = onSnapshot(docRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const fetchedArticle = { id: docSnap.id, ...docSnap.data() } as Article;
+                setArticle(fetchedArticle);
+                setSelectedExpertId(fetchedArticle.expertId || '');
+                setError(''); // Clear previous errors on successful fetch
+            } else {
+                setError('Article not found.');
+            }
+            setLoading(false);
+        }, (err) => {
+            console.error("Error fetching article:", err);
+            setError("Failed to load article data.");
+            setLoading(false);
+        });
+
+        // Clean up the listener when the component unmounts or the id changes.
+        return () => unsubscribe();
+    }, [id, isNewArticle]);
 
     const showSuccessMessage = (message: string) => {
         setSuccessMessage(message);
@@ -1026,10 +1032,8 @@ const ArticleEditorPage: React.FC = () => {
             // Calling 'queueArticleContentGeneration' correctly uses the task queue.
             const queueFunction = httpsCallable(functions, 'queueArticleContentGeneration');
             await queueFunction({ articleId: id });
-            showSuccessMessage('Article has been successfully queued for regeneration. The page will now refresh.');
-            // After a successful queue, refetch the article data to update the UI
-            // with the new 'Queued' status and clear any old error messages.
-            await fetchArticle();
+            // The onSnapshot listener will automatically update the UI.
+            showSuccessMessage('Article has been successfully queued for regeneration. The status will update shortly.');
         } catch (e: any) {
             setError(`Queueing for regeneration failed: ${e.message}`);
         } finally {

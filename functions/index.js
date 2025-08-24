@@ -264,8 +264,13 @@ export const requeueAllFailedArticles = onCall(
                     firestoreBatch.update(docRef, { status: "Queued", adminRevisionNotes: admin.firestore.FieldValue.delete() });
                 });
 
-                // Use the SDK's bulk enqueue feature for efficiency and robustness.
-                await queue.enqueue(tasksToEnqueue);
+                // Enqueue tasks sequentially. The "Queue does not exist" error was likely due to
+                // name resolution issues under load, which using the full function resource name
+                // should have fixed. The bulk enqueue method sends the entire array as a single
+                // task's payload, which our 'processArticle' function isn't designed to handle.
+                for (const task of tasksToEnqueue) {
+                    await queue.enqueue(task);
+                }
 
                 // If enqueueing succeeds, then commit the Firestore status updates.
                 await firestoreBatch.commit();
