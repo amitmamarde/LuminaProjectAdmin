@@ -17,13 +17,13 @@ admin.initializeApp({
 const db = admin.firestore();
 
 async function migrateArticleStatus() {
-  console.log('Starting migration to change article status from "NeedsRevision" to "GenerationFailed"');
+  console.log('Starting migration to change article status from "Queued" back to "GenerationFailed"');
 
   const articlesRef = db.collection('articles');
-  const snapshot = await articlesRef.where('status', '==', 'NeedsRevision').get();
+  const snapshot = await articlesRef.where('status', '==', 'Queued').get();
 
   if (snapshot.empty) {
-    console.log('No articles with status "NeedsRevision" found. Nothing to do.');
+    console.log('No articles with status "Queued" found. Nothing to do.');
     return;
   }
 
@@ -46,4 +46,3 @@ async function migrateArticleStatus() {
 migrateArticleStatus().catch(error => {
     console.error("An error occurred during migration:", error);
 });
-

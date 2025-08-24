@@ -225,6 +225,7 @@ export const requeueAllFailedArticles = onCall(
         console.log("Starting bulk re-queue for all 'GenerationFailed' articles.");
 
         try {
+            console.log("Starting bulk re-queue process...");
             const articlesRef = db.collection('articles');
             const querySnapshot = await articlesRef.where('status', '==', 'GenerationFailed').get();
 
@@ -234,36 +235,34 @@ export const requeueAllFailedArticles = onCall(
             }
 
             const failedArticles = querySnapshot.docs;
+            console.log(`Found ${failedArticles.length} failed articles. Processing only the first one for this test run.`);
             const queue = getFunctions().taskQueue("processArticle");
-            let requeuedCount = 0;
 
-            // Process articles in chunks to avoid exceeding Firestore and Task Queue limits.
-            // Firestore batch writes are limited to 500 operations.
-            // Task Queue bulk enqueue is limited to 100 tasks per call. We'll use 100.
-            const chunkSize = 100;
-            for (let i = 0; i < failedArticles.length; i += chunkSize) {
-                const chunk = failedArticles.slice(i, i + chunkSize);
-                console.log(`Processing chunk ${Math.floor(i / chunkSize) + 1}/${Math.ceil(failedArticles.length / chunkSize)} with ${chunk.length} articles.`);
+            // --- TESTING: Process only the first failed article ---
+            const articleToRequeue = failedArticles[0];
+            const articleId = articleToRequeue.id;
+            const articleTitle = articleToRequeue.data().title;
 
-                // Prepare a batch of tasks for the Task Queue
-                const tasksToEnqueue = chunk.map(doc => ({ articleId: doc.id }));
+            console.log(`Enqueuing test article: ${articleId} - Title: "${articleTitle}"`);
 
-                // Prepare a batch of writes for Firestore
-                const firestoreBatch = db.batch();
-                chunk.forEach(doc => {
-                    const docRef = articlesRef.doc(doc.id);
-                    firestoreBatch.update(docRef, { status: 'Queued', adminRevisionNotes: admin.firestore.FieldValue.delete() });
-                });
+            // Enqueue a single task for the first failed article.
+            await queue.enqueue({ articleId: articleId });
 
-                // Execute both operations for the chunk concurrently.
-                await Promise.all([queue.enqueue(tasksToEnqueue), firestoreBatch.commit()]);
-                requeuedCount += chunk.length;
-            }
+            // Update the status for that single article in Firestore.
+            const articleRef = articlesRef.doc(articleId);
+            await articleRef.update({
+                status: 'Queued',
+                adminRevisionNotes: admin.firestore.FieldValue.delete()
+            });
+
+            const requeuedCount = 1;
+            // --- END TESTING ---
 
             console.log(`Successfully re-queued ${requeuedCount} articles.`);
             return { success: true, message: `Successfully re-queued ${requeuedCount} articles.`, count: requeuedCount };
         } catch (error) {
             console.error("Failed to re-queue all failed articles:", error);
+            console.error("Error details:", error.message, error.stack);
             throw new HttpsError('internal', 'An error occurred during the bulk re-queue process.', { originalError: error.message });
         }
     }
