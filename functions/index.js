@@ -140,7 +140,10 @@ export const generateArticleContent = onDocumentCreated({
 
     try {
       // Enqueue the task for processing by the 'processArticle' worker function.
-      const queue = getFunctions().taskQueue("processArticle");
+      // Using the full resource name is more robust and can prevent "Queue does not exist" errors
+      // that sometimes occur due to IAM propagation delays or resolution issues.
+      const functionName = "projects/lumina-summaries/locations/europe-west1/functions/processArticle";
+      const queue = getFunctions().taskQueue(functionName);
       await queue.enqueue({ articleId: articleId });
 
       // Update the article status to 'Queued' to provide UI feedback and prevent re-triggering.
@@ -184,7 +187,9 @@ export const queueArticleContentGeneration = onCall(
 
         // 3. Enqueue the article generation task
         try {
-            const queue = getFunctions().taskQueue("processArticle");
+            // Using the full resource name is more robust and can prevent "Queue does not exist" errors.
+            const functionName = "projects/lumina-summaries/locations/europe-west1/functions/processArticle";
+            const queue = getFunctions().taskQueue(functionName);
             await queue.enqueue({ articleId: articleId });
 
             // Update status to Queued
@@ -235,28 +240,39 @@ export const requeueAllFailedArticles = onCall(
             }
 
             const failedArticles = querySnapshot.docs;
-            console.log(`Found ${failedArticles.length} failed articles. Processing only the first one for this test run.`);
-            const queue = getFunctions().taskQueue("processArticle");
+            console.log(`Found ${failedArticles.length} failed articles.`);
+            // Using the full resource name is more robust and can prevent "Queue does not exist" errors.
+            const functionName = "projects/lumina-summaries/locations/europe-west1/functions/processArticle";
+            const queue = getFunctions().taskQueue(functionName);
+            let requeuedCount = 0;
 
-            // --- TESTING: Process only the first failed article ---
-            const articleToRequeue = failedArticles[0];
-            const articleId = articleToRequeue.id;
-            const articleTitle = articleToRequeue.data().title;
+            // Process articles in chunks to avoid exceeding Firestore and Task Queue limits.
+            // Firestore batch writes are limited to 500 operations.
+            // Task Queue bulk enqueue is limited to 100 tasks per call. We'll use 100.
+            const chunkSize = 100;
+            for (let i = 0; i < failedArticles.length; i += chunkSize) {
+                const chunk = failedArticles.slice(i, i + chunkSize);
+                console.log(`Processing chunk ${Math.floor(i / chunkSize) + 1}/${Math.ceil(failedArticles.length / chunkSize)} with ${chunk.length} articles.`);
 
-            console.log(`Enqueuing test article: ${articleId} - Title: "${articleTitle}"`);
+                // Prepare a batch of tasks for the Task Queue
+                const tasksToEnqueue = chunk.map((doc) => ({ articleId: doc.id }));
 
-            // Enqueue a single task for the first failed article.
-            await queue.enqueue({ articleId: articleId });
+                // Prepare a batch of writes for Firestore
+                const firestoreBatch = db.batch();
+                chunk.forEach((doc) => {
+                    const docRef = articlesRef.doc(doc.id);
+                    firestoreBatch.update(docRef, { status: "Queued", adminRevisionNotes: admin.firestore.FieldValue.delete() });
+                });
 
-            // Update the status for that single article in Firestore.
-            const articleRef = articlesRef.doc(articleId);
-            await articleRef.update({
-                status: 'Queued',
-                adminRevisionNotes: admin.firestore.FieldValue.delete()
-            });
+                // Use the SDK's bulk enqueue feature for efficiency and robustness.
+                await queue.enqueue(tasksToEnqueue);
 
-            const requeuedCount = 1;
-            // --- END TESTING ---
+                // If enqueueing succeeds, then commit the Firestore status updates.
+                await firestoreBatch.commit();
+
+                requeuedCount += chunk.length;
+                console.log(`Successfully enqueued and updated status for ${chunk.length} articles.`);
+            }
 
             console.log(`Successfully re-queued ${requeuedCount} articles.`);
             return { success: true, message: `Successfully re-queued ${requeuedCount} articles.`, count: requeuedCount };

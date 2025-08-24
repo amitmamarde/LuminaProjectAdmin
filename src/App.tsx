@@ -1022,11 +1022,16 @@ const ArticleEditorPage: React.FC = () => {
         setSuccessMessage('');
 
         try {
-            const regenerateFunction = httpsCallable(functions, 'regenerateArticleContent');
-            await regenerateFunction({ articleId: id });
-            showSuccessMessage('Article has been queued for regeneration. The status will update shortly.');
+            // This button should queue the article, not regenerate it synchronously.
+            // Calling 'queueArticleContentGeneration' correctly uses the task queue.
+            const queueFunction = httpsCallable(functions, 'queueArticleContentGeneration');
+            await queueFunction({ articleId: id });
+            showSuccessMessage('Article has been successfully queued for regeneration. The page will now refresh.');
+            // After a successful queue, refetch the article data to update the UI
+            // with the new 'Queued' status and clear any old error messages.
+            await fetchArticle();
         } catch (e: any) {
-            setError(`Regeneration failed: ${e.message}`);
+            setError(`Queueing for regeneration failed: ${e.message}`);
         } finally {
             setIsRegenerating(false);
         }
