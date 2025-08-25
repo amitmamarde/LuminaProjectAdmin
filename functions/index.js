@@ -41,6 +41,9 @@ OUTPUT:
 
 //  Initialize Firebase Admin SDK to interact with Firestore
 
+// Centralize the model name for easier updates.
+const GEMINI_MODEL = "gemini-2.5-flash-lite";
+
 admin.initializeApp();
 const db = admin.firestore();
 
@@ -141,7 +144,7 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
 
       console.log(`[${articleId}] Calling Gemini API...`);
       const textResponse = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: GEMINI_MODEL,
         systemInstruction: { parts: [{ text: GLOBAL_SYSTEM_PROMPT }] },
           contents: [{ parts: [{ text: textPrompt }] }],
         config: {
@@ -468,7 +471,7 @@ async function processDiscoveryConfig(config, ai, db, promptSchema, geminiApiKey
     try {
         // 3. Make a single AI call that uses search and returns structured JSON.
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: GEMINI_MODEL,
             systemInstruction: { parts: [{ text: GLOBAL_SYSTEM_PROMPT }] },
             contents: [{ parts: [{ text: discoveryPrompt }] }],
             config: {
@@ -610,6 +613,206 @@ export const discoverTopics = onSchedule({
             console.error(`  [FAILED]  ${config.articleType} in ${config.region}:`, result.reason.message);
         }
     });
+});
+
+/**
+ * Processes a single source domain to test its viability and fetch one article.
+ * Logs the result to a source test report in Firestore.
+ * @param {object} source - The source object { domain, pillar, region }.
+ * @param {admin.firestore.DocumentReference} reportRef - The reference to the main report document.
+ * @param {GoogleGenAI} ai - The GoogleGenAI instance.
+ */
+async function processSingleSourceTest(source, reportRef, ai) {
+    const { domain, pillar, region } = source;
+    const reportResultsRef = reportRef.collection('results');
+    // Sanitize domain for a valid Firestore document ID.
+    const docId = domain.replace(/[^a-zA-Z0-9.-]/g, '_');
+
+    let articleType;
+    if (pillar === 'positive_news') articleType = 'Positive News';
+    else if (pillar === 'general_quality_news') articleType = 'Trending Topic';
+    else if (pillar === 'research_breakthroughs') articleType = 'Trending Topic';
+    else if (pillar === 'misinformation_watch') articleType = 'Misinformation';
+    else {
+        const errorMessage = `Unsupported pillar type in registry: ${pillar}`;
+        console.error(`[Source Test] FAILED for ${domain}:`, errorMessage);
+        await reportResultsRef.doc(docId).set({
+            ...source,
+            status: 'Failure',
+            error: errorMessage,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await reportRef.update({ failureCount: admin.firestore.FieldValue.increment(1) });
+        return;
+    }
+
+    const testPrompt = `
+    Your task is to discover exactly 1 new, distinct, and relevant story for the content pillar "${articleType}" from the region "${region}".
+    You MUST strictly use the following single domain for your search.
+
+    ALLOWED DOMAIN:
+    ["${domain}"]
+
+    TASK:
+    1.  Use Google Search, creating a query with a "site:${domain}" filter.
+    2.  Find a story published or updated in the last 7 days.
+    3.  Extract the required information and format it into the JSON schema.
+    4.  It is critical that you use the EXACT URL from the source. Do not invent, alter, or truncate the URLs.
+
+    Categories must be from this list: ${JSON.stringify(SUPPORTED_CATEGORIES)}.
+    `;
+
+    const promptSchema = {
+        type: Type.OBJECT,
+        properties: {
+            suggestions: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        title: { type: Type.STRING },
+                        shortDescription: { type: Type.STRING },
+                        categories: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        sourceUrl: { type: Type.STRING },
+                        sourceTitle: { type: Type.STRING },
+                    },
+                    required: ["title", "shortDescription", "categories", "sourceUrl"]
+                }
+            }
+        },
+        required: ["suggestions"]
+    };
+
+    try {
+        const response = await ai.models.generateContent({
+            model: GEMINI_MODEL,
+            systemInstruction: { parts: [{ text: GLOBAL_SYSTEM_PROMPT }] },
+            contents: [{ parts: [{ text: testPrompt }] }],
+            config: {
+                tools: [{ googleSearch: {} }],
+                responseMimeType: "application/json",
+                responseSchema: promptSchema,
+            },
+        });
+
+        const jsonString = response.text.trim();
+        const result = JSON.parse(jsonString);
+
+        if (!result.suggestions || result.suggestions.length === 0) {
+            throw new Error("AI returned no suggestions for this source.");
+        }
+
+        const suggestion = result.suggestions[0];
+
+        const existingArticle = await db.collection('articles').where('sourceUrl', '==', suggestion.sourceUrl).limit(1).get();
+        if (!existingArticle.empty) {
+            throw new Error(`Article from this source URL already exists: ${suggestion.sourceUrl}`);
+        }
+
+        const newArticleRef = db.collection('articles').doc();
+        await newArticleRef.set({
+            title: suggestion.title,
+            articleType: articleType,
+            categories: suggestion.categories || [],
+            region: region,
+            shortDescription: suggestion.shortDescription,
+            status: 'Draft',
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            discoveredAt: admin.firestore.FieldValue.serverTimestamp(),
+            sourceUrl: suggestion.sourceUrl || null,
+            sourceTitle: suggestion.sourceTitle || suggestion.title,
+            discoveryMethod: 'SourceTest',
+            sourceTestReportId: reportRef.id,
+        });
+
+        await reportResultsRef.doc(docId).set({
+            ...source,
+            status: 'Success',
+            fetchedArticleTitle: suggestion.title,
+            fetchedArticleUrl: suggestion.sourceUrl,
+            createdArticleId: newArticleRef.id,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await reportRef.update({ successCount: admin.firestore.FieldValue.increment(1) });
+        console.log(`[Source Test] SUCCESS for ${domain}: ${suggestion.title}`);
+
+    } catch (error) {
+        console.error(`[Source Test] FAILED for ${domain}:`, error.message);
+        await reportResultsRef.doc(docId).set({
+            ...source,
+            status: 'Failure',
+            error: error.message,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await reportRef.update({ failureCount: admin.firestore.FieldValue.increment(1) });
+    }
+}
+
+/**
+ * A callable function for admins to test every source in source-registry.json.
+ * It generates a report in Firestore under the `sourceTestReports` collection.
+ */
+export const testAllSources = onCall({
+    region: "europe-west1",
+    secrets: ["GEMINI_API_KEY"],
+    cors: [/luminaprojectadmin\.netlify\.app$/, "http://localhost:5173"],
+    timeoutSeconds: 540, // Allow up to 9 minutes for all sources to be tested.
+}, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+    }
+    const userDoc = await db.collection('users').doc(request.auth.uid).get();
+    if (!userDoc.exists || userDoc.data().role !== 'Admin') {
+        throw new HttpsError('permission-denied', 'Only admins can run this source test.');
+    }
+
+    console.log(`[Source Test] Starting test run, initiated by ${userDoc.data().email}.`);
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+
+    const reportRef = db.collection('sourceTestReports').doc();
+    await reportRef.set({
+        status: 'Running',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        totalSources: 0,
+        successCount: 0,
+        failureCount: 0,
+        triggeredBy: userDoc.data().email,
+    });
+
+    const sourcesToTest = [];
+    const pillars = Object.keys(SOURCE_REGISTRY.sources);
+    for (const pillar of pillars) {
+        const pillarData = SOURCE_REGISTRY.sources[pillar];
+        const regions = Object.keys(pillarData);
+        for (const region of regions) {
+            if (region === 'notes') continue;
+            const regionData = pillarData[region];
+            if (regionData.allowlist && Array.isArray(regionData.allowlist)) {
+                for (const domain of regionData.allowlist) {
+                    sourcesToTest.push({ domain, pillar, region });
+                }
+            }
+        }
+    }
+
+    await reportRef.update({ totalSources: sourcesToTest.length });
+
+    // Process each source sequentially to avoid overwhelming APIs.
+    for (const source of sourcesToTest) {
+        await processSingleSourceTest(source, reportRef, ai);
+    }
+
+    const finalReportSnap = await reportRef.get();
+    const finalData = finalReportSnap.data();
+    await reportRef.update({
+        status: 'Completed',
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const summary = `Source test completed. Report ID: ${reportRef.id}. Success: ${finalData.successCount}, Failure: ${finalData.failureCount}`;
+    console.log(`[Source Test] ${summary}`);
+    return { success: true, message: summary, reportId: reportRef.id };
 });
 
 /**

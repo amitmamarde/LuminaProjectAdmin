@@ -473,6 +473,8 @@ const LoginPage: React.FC = () => {
 const DashboardPage: React.FC = () => {
     const { userData } = useAuth();
     const [isRequeuing, setIsRequeuing] = useState(false);
+    const [isTestingSources, setIsTestingSources] = useState(false);
+    const [testFeedback, setTestFeedback] = useState('');
     const [feedback, setFeedback] = useState('');
 
     if (!userData) return <Navigate to="/login" />;
@@ -497,6 +499,26 @@ const DashboardPage: React.FC = () => {
         }
     };
 
+    const handleTestSource = async () => {
+        if (!window.confirm('This will trigger a test to fetch one article from every source in the registry (~100 sources). This may take several minutes and will incur costs. Continue?')) {
+            return;
+        }
+        setIsTestingSources(true);
+        setTestFeedback('');
+        try {
+            const testFunction = httpsCallable(functions, 'testAllSources');
+            const result = await testFunction({});
+            const data = result.data as { success: boolean; message: string; reportId: string };
+            setTestFeedback(data.message || 'Test completed. Check Firestore for the report.');
+        } catch (error: any) {
+            console.error("Error testing sources:", error);
+            setTestFeedback(`Error: ${error.message || 'Failed to start source test.'}`);
+        } finally {
+            setIsTestingSources(false);
+            setTimeout(() => setTestFeedback(''), 10000);
+        }
+    };
+
     return (
         <div className="bg-brand-background min-h-screen">
             <Header />
@@ -504,12 +526,18 @@ const DashboardPage: React.FC = () => {
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-3xl font-bold text-brand-text-primary">Dashboard</h1>
                     {userData.role === 'Admin' && (
-                        <button onClick={handleRequeueAll} disabled={isRequeuing} className="bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 disabled:bg-purple-300 transition">
-                            {isRequeuing ? 'Re-queueing...' : 'Re-queue All Failed Articles'}
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                            <button onClick={handleTestSource} disabled={isTestingSources} className="bg-teal-600 text-white py-2 px-4 rounded-md hover:bg-teal-700 disabled:bg-teal-300 transition">
+                                {isTestingSources ? 'Testing Sources...' : 'Test All Sources'}
+                            </button>
+                            <button onClick={handleRequeueAll} disabled={isRequeuing} className="bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 disabled:bg-purple-300 transition">
+                                {isRequeuing ? 'Re-queueing...' : 'Re-queue All Failed'}
+                            </button>
+                        </div>
                     )}
                 </div>
                 {feedback && <div className={`p-3 rounded mb-4 text-center ${feedback.startsWith('Error') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>{feedback}</div>}
+                {testFeedback && <div className={`p-3 rounded mb-4 text-center ${testFeedback.startsWith('Error') ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{testFeedback}</div>}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <DashboardCard title="My Work Queue" link="/my-tasks" description="View articles assigned to you for review or revision." />
                     {userData.role === 'Admin' && <DashboardCard title="Review Submissions" link="/admin-review" description="Review articles submitted by experts." />}

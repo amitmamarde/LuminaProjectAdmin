@@ -13,7 +13,7 @@ The project is a monorepo containing both the frontend admin portal and the back
 -   **Frontend (`/src`):** A React (Vite) single-page application that serves as the administrative and expert portal. It's designed for managing the content lifecycle.
 -   **Backend (`/functions`):** A set of serverless Firebase Cloud Functions that handle automated tasks like content generation and topic discovery.
 -   **Database:** Google Firestore is used to store article data, content suggestions, and workflow statuses.
--   **AI Model:** Google Gemini (`gemini-2.5-flash`) is used for its powerful text generation and tool-use capabilities (Google Search).
+-   **AI Model:** Google Gemini (`gemini-2.5-flash-lite`) is used for its powerful text generation and tool-use capabilities (Google Search).
 -   **Deployment:** The frontend is deployed via Netlify, and the backend functions are deployed to Firebase.
 
 ---
