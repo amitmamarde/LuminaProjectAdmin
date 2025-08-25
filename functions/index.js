@@ -513,18 +513,19 @@ async function processDiscoveryConfig(config, ai, db, promptSchema, geminiApiKey
                         categories: suggestion.categories || [],
                         region: config.region,
                         shortDescription: suggestion.shortDescription,
-                        status: 'Generating', // A temporary status while we call the generation logic.
+                        // Set status to 'Draft'. The onDocumentCreated trigger
+                        // will automatically queue it for generation.
+                        status: 'Draft',
                         createdAt: admin.firestore.FieldValue.serverTimestamp(),
                         discoveredAt: admin.firestore.FieldValue.serverTimestamp(),
                         sourceUrl: suggestion.sourceUrl || null,
                         sourceTitle: suggestion.sourceTitle || null,
                     };
 
+                    // By setting the document with status 'Draft', we allow the
+                    // `generateArticleContent` trigger to handle the queueing.
                     await newArticleRef.set(articleData);
-                    console.log(`[${newArticleRef.id}] Created new article document for "${suggestion.title}". Now generating content...`);
-
-                    // Directly call the generation logic.
-                    await performContentGeneration(newArticleRef.id, articleData, geminiApiKey);
+                    console.log(`[${newArticleRef.id}] Created new article draft for "${suggestion.title}". It will be queued for generation.`);
                     newArticleCount++;
                 }
             }
