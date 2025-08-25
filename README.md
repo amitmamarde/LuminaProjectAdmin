@@ -13,8 +13,20 @@ The project is a monorepo containing both the frontend admin portal and the back
 -   **Frontend (`/src`):** A React (Vite) single-page application that serves as the administrative and expert portal. It's designed for managing the content lifecycle.
 -   **Backend (`/functions`):** A set of serverless Firebase Cloud Functions that handle automated tasks like content generation and topic discovery.
 -   **Database:** Google Firestore is used to store article data, content suggestions, and workflow statuses.
--   **AI Model:** Google Gemini (`gemini-2.5-flash-lite`) is used for its powerful text generation and tool-use capabilities (Google Search).
+-   **AI Model:** Google Gemini (`gemini-2.5-flash-lite`) is used for its powerful text generation and tool-use capabilities (Google Search). Note that `gemini-2.5-flash-lite` is a project-specific alias; the actual model used (e.g., `gemini-1.5-flash-001`) is defined as a constant in `functions/index.js`.
 -   **Deployment:** The frontend is deployed via Netlify, and the backend functions are deployed to Firebase.
+
+---
+
+## Cost Considerations
+
+This project uses Google Cloud services, including Firebase/Firestore and the Gemini API, which are pay-as-you-go services.
+
+*   **Gemini API Costs:** API usage is billed based on the number of characters in the input (prompts) and output (generated text). While models like Gemini Flash are highly cost-effective, automated functions like `discoverTopics` and the admin "Test All Sources" tool can make many API calls, leading to costs.
+*   **API Quotas vs. Costs:** It's important to distinguish between API *quotas* (e.g., requests per minute/day) and *costs*. Quotas are rate limits to ensure service stability. You are billed for usage even if you are below your quota limits. Think of it like a mobile phone plan: you might have a limit on the number of calls you can make, but you still pay for the minutes you use.
+*   **Firebase Costs:** Firestore usage is billed based on the number of reads, writes, and deletes, as well as data storage. The automated functions in this project perform many database operations.
+
+Always monitor your usage in the Google Cloud Console to avoid unexpected charges.
 
 ---
 

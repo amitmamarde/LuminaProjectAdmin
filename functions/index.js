@@ -773,6 +773,7 @@ export const testAllSources = onCall({
     const reportRef = db.collection('sourceTestReports').doc();
     await reportRef.set({
         status: 'Running',
+        testType: 'Full', // Differentiate from the sample test
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         totalSources: 0,
         successCount: 0,
@@ -815,6 +816,74 @@ export const testAllSources = onCall({
     return { success: true, message: summary, reportId: reportRef.id };
 });
 
+/**
+ * A callable function for admins to test a small sample of sources from source-registry.json.
+ * It selects one source per pillar/region combination to provide a quick, low-cost health check.
+ * It generates a report in Firestore under the `sourceTestReports` collection.
+ */
+export const testSampleSources = onCall({
+    region: "europe-west1",
+    secrets: ["GEMINI_API_KEY"],
+    cors: [/luminaprojectadmin\.netlify\.app$/, "http://localhost:5173"],
+    timeoutSeconds: 180, // Shorter timeout for a smaller sample.
+}, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+    }
+    const userDoc = await db.collection('users').doc(request.auth.uid).get();
+    if (!userDoc.exists || userDoc.data().role !== 'Admin') {
+        throw new HttpsError('permission-denied', 'Only admins can run this source test.');
+    }
+
+    console.log(`[Source Sample Test] Starting test run, initiated by ${userDoc.data().email}.`);
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+
+    const reportRef = db.collection('sourceTestReports').doc();
+    await reportRef.set({
+        status: 'Running',
+        testType: 'Sample', // Differentiate from the full test
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        totalSources: 0,
+        successCount: 0,
+        failureCount: 0,
+        triggeredBy: userDoc.data().email,
+    });
+
+    const sourcesToTest = [];
+    const pillars = Object.keys(SOURCE_REGISTRY.sources);
+    for (const pillar of pillars) {
+        const pillarData = SOURCE_REGISTRY.sources[pillar];
+        const regions = Object.keys(pillarData);
+        for (const region of regions) {
+            if (region === 'notes') continue;
+            const regionData = pillarData[region];
+            if (regionData.allowlist && Array.isArray(regionData.allowlist) && regionData.allowlist.length > 0) {
+                // Take the first source from each list as a sample.
+                const sampleDomain = regionData.allowlist[0];
+                sourcesToTest.push({ domain: sampleDomain, pillar, region });
+            }
+        }
+    }
+
+    await reportRef.update({ totalSources: sourcesToTest.length });
+
+    // Process each source sequentially to avoid overwhelming APIs.
+    for (const source of sourcesToTest) {
+        await processSingleSourceTest(source, reportRef, ai);
+    }
+
+    const finalReportSnap = await reportRef.get();
+    const finalData = finalReportSnap.data();
+    await reportRef.update({
+        status: 'Completed',
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const summary = `Source sample test completed. Report ID: ${reportRef.id}. Success: ${finalData.successCount}, Failure: ${finalData.failureCount}`;
+    console.log(`[Source Sample Test] ${summary}`);
+    return { success: true, message: summary, reportId: reportRef.id };
+});
 /**
  * Generates an image using an external API and returns its URL.
  * This is a callable function, which handles CORS automatically for allowed origins.

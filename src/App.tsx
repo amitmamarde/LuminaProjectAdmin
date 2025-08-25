@@ -473,6 +473,7 @@ const LoginPage: React.FC = () => {
 const DashboardPage: React.FC = () => {
     const { userData } = useAuth();
     const [isRequeuing, setIsRequeuing] = useState(false);
+    const [isTestingSample, setIsTestingSample] = useState(false);
     const [isTestingSources, setIsTestingSources] = useState(false);
     const [testFeedback, setTestFeedback] = useState('');
     const [feedback, setFeedback] = useState('');
@@ -519,6 +520,26 @@ const DashboardPage: React.FC = () => {
         }
     };
 
+    const handleSampleTestSource = async () => {
+        if (!window.confirm('This will test one source from each category/region combination to check for major issues. This is a low-cost test. Continue?')) {
+            return;
+        }
+        setIsTestingSample(true);
+        setTestFeedback('');
+        try {
+            const testFunction = httpsCallable(functions, 'testSampleSources');
+            const result = await testFunction({});
+            const data = result.data as { success: boolean; message: string; reportId: string };
+            setTestFeedback(data.message || 'Sample test completed. Check Firestore for the report.');
+        } catch (error: any) {
+            console.error("Error testing sample sources:", error);
+            setTestFeedback(`Error: ${error.message || 'Failed to start sample source test.'}`);
+        } finally {
+            setIsTestingSample(false);
+            setTimeout(() => setTestFeedback(''), 10000);
+        }
+    };
+
     return (
         <div className="bg-brand-background min-h-screen">
             <Header />
@@ -527,10 +548,13 @@ const DashboardPage: React.FC = () => {
                     <h1 className="text-3xl font-bold text-brand-text-primary">Dashboard</h1>
                     {userData.role === 'Admin' && (
                         <div className="flex flex-wrap gap-2">
-                            <button onClick={handleTestSource} disabled={isTestingSources} className="bg-teal-600 text-white py-2 px-4 rounded-md hover:bg-teal-700 disabled:bg-teal-300 transition">
-                                {isTestingSources ? 'Testing Sources...' : 'Test All Sources'}
+                            <button onClick={handleSampleTestSource} disabled={isTestingSample || isTestingSources} className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-blue-300 transition">
+                                {isTestingSample ? 'Testing Sample...' : 'Test Sample Sources'}
                             </button>
-                            <button onClick={handleRequeueAll} disabled={isRequeuing} className="bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 disabled:bg-purple-300 transition">
+                            <button onClick={handleTestSource} disabled={isTestingSources || isTestingSample} className="bg-teal-600 text-white py-2 px-4 rounded-md hover:bg-teal-700 disabled:bg-teal-300 transition">
+                                {isTestingSources ? 'Testing All...' : 'Test All Sources'}
+                            </button>
+                            <button onClick={handleRequeueAll} disabled={isRequeuing || isTestingSources || isTestingSample} className="bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 disabled:bg-purple-300 transition">
                                 {isRequeuing ? 'Re-queueing...' : 'Re-queue All Failed'}
                             </button>
                         </div>
