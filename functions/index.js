@@ -47,6 +47,40 @@ const GEMINI_MODEL = "gemini-2.5-flash-lite";
 admin.initializeApp();
 const db = admin.firestore();
 
+// A helper function to add a delay between API calls to respect rate limits.
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// A shared tool definition for getting structured article suggestions.
+// This replaces the separate `promptSchema` objects and is used for function calling.
+const saveSuggestionsTool = {
+    functionDeclarations: [
+        {
+            name: "save_suggestions",
+            description: "Saves a list of discovered article suggestions.",
+            parameters: {
+                type: Type.OBJECT,
+                properties: {
+                    suggestions: {
+                        type: Type.ARRAY,
+                        description: "A list of article suggestions found.",
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                title: { type: Type.STRING, description: "The title of the article." },
+                                shortDescription: { type: Type.STRING, description: "A brief summary of the article." },
+                                categories: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Relevant categories for the article." },
+                                sourceUrl: { type: Type.STRING, description: "The direct URL to the source article." },
+                                sourceTitle: { type: Type.STRING, description: "The title of the source publication or website." },
+                            },
+                            required: ["title", "shortDescription", "categories", "sourceUrl"]
+                        }
+                    }
+                },
+                required: ["suggestions"]
+            }
+        }
+    ]
+};
 // A centralized list of categories makes it easier to manage and reuse.
 const SUPPORTED_CATEGORIES = [
     'Science & Technology', 
@@ -427,9 +461,8 @@ export const regenerateArticleContent = onCall({
  * @param {object} config The discovery configuration object.
  * @param {GoogleGenAI} ai The GoogleGenAI instance.
   * @param {FirebaseFirestore.Firestore} db The Firestore instance.
- * @param {object} promptSchema The schema for the AI prompt response.
  */
-async function processDiscoveryConfig(config, ai, db, promptSchema, geminiApiKey) { // eslint-disable-line no-unused-vars
+async function processDiscoveryConfig(config, ai, db, geminiApiKey) { // eslint-disable-line no-unused-vars
     console.log(`Discovering ${config.articleType} for ${config.region}...`);
 
     // 1. Select the correct sources from the registry based on the config.
@@ -462,6 +495,7 @@ async function processDiscoveryConfig(config, ai, db, promptSchema, geminiApiKey
     2.  Find stories published or updated in the last 72 hours.
     3.  For each story, extract the required information and format it into the JSON schema.
     4.  Ensure stories are unique and not duplicates of each other.
+    5.  After finding the stories, you must call the 'save_suggestions' function with the results.
     5.  For 'Positive News', find uplifting stories. For 'Trending Topic', find globally relevant news. For 'Misinformation', find recently debunked claims.
     6.  It is critical that you use the EXACT URL from the source. Do not invent, alter, or truncate the URLs.
     
@@ -470,24 +504,30 @@ async function processDiscoveryConfig(config, ai, db, promptSchema, geminiApiKey
 
     try {
         // 3. Make a single AI call that uses search and returns structured JSON.
-        const response = await ai.models.generateContent({
+        const result = await ai.models.generateContent({
             model: GEMINI_MODEL,
             systemInstruction: { parts: [{ text: GLOBAL_SYSTEM_PROMPT }] },
             contents: [{ parts: [{ text: discoveryPrompt }] }],
-            config: {
-                tools: [{ googleSearch: {} }],
-                responseMimeType: "application/json",
-                responseSchema: promptSchema,
+            tools: [saveSuggestionsTool, { googleSearch: {} }],
+            toolConfig: {
+                functionCallingConfig: {
+                    mode: 'ONE',
+                    allowedFunctionNames: ['save_suggestions'],
+                },
             },
         });
 
-        const jsonString = response.text.trim();
-        const result = JSON.parse(jsonString);
+        const calls = result.response.functionCalls();
+        if (!calls || calls.length === 0) {
+            console.log(`[Discovery] AI did not return any suggestions for ${config.articleType} in ${config.region}.`);
+            return;
+        }
+        const suggestionsData = calls[0].args;
 
-        if (result.suggestions && result.suggestions.length > 0) {
+        if (suggestionsData.suggestions && suggestionsData.suggestions.length > 0) {
             let newArticleCount = 0;
  
-            const validSuggestions = result.suggestions.filter(suggestion => 
+            const validSuggestions = suggestionsData.suggestions.filter(suggestion => 
                 suggestion.title && typeof suggestion.title === 'string' && suggestion.title.trim() !== ''
             );
 
@@ -576,30 +616,10 @@ export const discoverTopics = onSchedule({
         { articleType: 'Misinformation', region: 'Worldwide' },
     ];
 
-    const promptSchema = {
-        type: Type.OBJECT,
-        properties: {
-            suggestions: {
-                type: Type.ARRAY,
-                items: {
-                    type: Type.OBJECT,
-                    properties: {
-                        title: { type: Type.STRING },
-                        shortDescription: { type: Type.STRING },
-                        categories: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        sourceUrl: { type: Type.STRING },
-                        sourceTitle: { type: Type.STRING },
-                    },
-                    required: ["title", "shortDescription", "categories"]
-                }
-            }
-        },
-        required: ["suggestions"]
-    };
-    
     // We can process these in parallel to speed up the discovery process.
+    // Note: This runs discovery jobs in parallel, but the source tests run sequentially.
     const discoveryPromises = discoveryConfigs.map(config => 
-        processDiscoveryConfig(config, ai, db, promptSchema, geminiApiKey)
+        processDiscoveryConfig(config, ai, db, geminiApiKey)
     );
 
     const results = await Promise.allSettled(discoveryPromises);
@@ -657,6 +677,7 @@ async function processSingleSourceTest(source, reportRef, ai) {
     1.  Use Google Search, creating a query with a "site:${domain}" filter.
     2.  Find a story published or updated in the last 7 days.
     3.  Extract the required information and format it into the JSON schema.
+    4.  After finding the story, you must call the 'save_suggestions' function with the result.
     4.  It is critical that you use the EXACT URL from the source. Do not invent, alter, or truncate the URLs.
 
     Categories must be from this list: ${JSON.stringify(SUPPORTED_CATEGORIES)}.
@@ -664,41 +685,29 @@ async function processSingleSourceTest(source, reportRef, ai) {
 
     const promptSchema = {
         type: Type.OBJECT,
-        properties: {
-            suggestions: {
-                type: Type.ARRAY,
-                items: {
-                    type: Type.OBJECT,
-                    properties: {
-                        title: { type: Type.STRING },
-                        shortDescription: { type: Type.STRING },
-                        categories: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        sourceUrl: { type: Type.STRING },
-                        sourceTitle: { type: Type.STRING },
-                    },
-                    required: ["title", "shortDescription", "categories", "sourceUrl"]
-                }
-            }
-        },
-        required: ["suggestions"]
     };
 
     try {
-        const response = await ai.models.generateContent({
+        const result = await ai.models.generateContent({
             model: GEMINI_MODEL,
             systemInstruction: { parts: [{ text: GLOBAL_SYSTEM_PROMPT }] },
             contents: [{ parts: [{ text: testPrompt }] }],
-            config: {
-                tools: [{ googleSearch: {} }],
-                responseMimeType: "application/json",
-                responseSchema: promptSchema,
+            tools: [saveSuggestionsTool, { googleSearch: {} }],
+            toolConfig: {
+                functionCallingConfig: {
+                    mode: 'ONE',
+                    allowedFunctionNames: ['save_suggestions'],
+                },
             },
         });
 
-        const jsonString = response.text.trim();
-        const result = JSON.parse(jsonString);
+        const calls = result.response.functionCalls();
+        if (!calls || calls.length === 0) {
+            throw new Error("AI did not return a function call as expected.");
+        }
+        const suggestionsData = calls[0].args;
 
-        if (!result.suggestions || result.suggestions.length === 0) {
+        if (!suggestionsData.suggestions || suggestionsData.suggestions.length === 0) {
             throw new Error("AI returned no suggestions for this source.");
         }
 
@@ -802,6 +811,7 @@ export const testAllSources = onCall({
     // Process each source sequentially to avoid overwhelming APIs.
     for (const source of sourcesToTest) {
         await processSingleSourceTest(source, reportRef, ai);
+        await delay(1200); // Wait 1.2 seconds to stay safely under 60 RPM limit.
     }
 
     const finalReportSnap = await reportRef.get();
@@ -871,6 +881,7 @@ export const testSampleSources = onCall({
     // Process each source sequentially to avoid overwhelming APIs.
     for (const source of sourcesToTest) {
         await processSingleSourceTest(source, reportRef, ai);
+        await delay(1200); // Wait 1.2 seconds to stay safely under 60 RPM limit.
     }
 
     const finalReportSnap = await reportRef.get();
