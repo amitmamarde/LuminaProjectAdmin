@@ -484,22 +484,20 @@ async function processDiscoveryConfig(config, ai, db, geminiApiKey) { // eslint-
 
     // 2. Construct a single, powerful prompt for discovery.
     const discoveryPrompt = `
-    Your task is to discover 5 new, distinct, and relevant stories for the content pillar "${config.articleType}" in the region "${config.region}".
-    You MUST strictly adhere to the source policy and only use the provided list of allowed domains.
-    
+    Your task is to discover up to 5 new, distinct, and relevant stories for the content pillar "${config.articleType}" in the region "${config.region}".
+    Your ONLY valid output is a function call to the 'save_suggestions' tool. Do not output any other text or JSON.
+
     ALLOWED DOMAINS:
     ${JSON.stringify(allowedDomains)}
 
     TASK:
-    1.  Use Google Search, creating queries with "site:" filters for the domains listed above.
-    2.  Find stories published or updated in the last 72 hours.
-    3.  For each story, extract the required information and format it into the JSON schema.
-    4.  Ensure stories are unique and not duplicates of each other.
-    5.  After finding the stories, you must call the 'save_suggestions' function with the results.
-    5.  For 'Positive News', find uplifting stories. For 'Trending Topic', find globally relevant news. For 'Misinformation', find recently debunked claims.
-    6.  It is critical that you use the EXACT URL from the source. Do not invent, alter, or truncate the URLs.
-    
-    Categories must be from this list: ${JSON.stringify(SUPPORTED_CATEGORIES)}.
+    1.  Use Google Search with "site:" filters for the domains listed above to find stories published or updated in the last 72 hours.
+    2.  For 'Positive News', find uplifting stories. For 'Trending Topic', find globally relevant news. For 'Misinformation', find recently debunked claims.
+    3.  For each story found, extract its title, a short description, relevant categories from the list below, the source URL, and the source title.
+    4.  Ensure stories are unique. Use the EXACT URL from the source.
+    5.  Call the 'save_suggestions' function with an array of all the suggestion objects you found.
+    6.  If you find no suitable stories, call 'save_suggestions' with an empty array.
+    Categories list: ${JSON.stringify(SUPPORTED_CATEGORIES)}.
     `;
 
     try {
@@ -667,25 +665,23 @@ async function processSingleSourceTest(source, reportRef, ai) {
     }
 
     const testPrompt = `
-    Your task is to discover exactly 1 new, distinct, and relevant story for the content pillar "${articleType}" from the region "${region}".
-    You MUST strictly use the following single domain for your search.
+    Your task is to find exactly ONE recent article from the domain "${domain}" that fits the content pillar "${articleType}" for the "${region}" region.
+    Your ONLY valid output is a function call to the 'save_suggestions' tool. Do not output any other text or JSON.
 
-    ALLOWED DOMAIN:
-    ["${domain}"]
+    You MUST follow these steps:
+    1.  Use Google Search with a "site:${domain}" filter to find a story published or updated in the last 7 days.
+    2.  If you find a suitable article, extract its details.
+    3.  Call the 'save_suggestions' function with the result. The result must be an array containing a single suggestion object.
 
-    TASK:
-    1.  Use Google Search, creating a query with a "site:${domain}" filter.
-    2.  Find a story published or updated in the last 7 days.
-    3.  Extract the required information and format it into the JSON schema.
-    4.  After finding the story, you must call the 'save_suggestions' function with the result.
-    4.  It is critical that you use the EXACT URL from the source. Do not invent, alter, or truncate the URLs.
+    The suggestion object for the tool call MUST have the following properties:
+    - "title": The full title of the article.
+    - "shortDescription": A brief, one or two-sentence summary of the article.
+    - "categories": An array containing one or more relevant categories from this list: ${JSON.stringify(SUPPORTED_CATEGORIES)}.
+    - "sourceUrl": The exact, full URL to the source article. Do not alter it.
+    - "sourceTitle": The name of the publication, which is "${domain}".
 
-    Categories must be from this list: ${JSON.stringify(SUPPORTED_CATEGORIES)}.
+    If you cannot find any suitable article from the last 7 days, you MUST still call the 'save_suggestions' function, but with an empty "suggestions" array.
     `;
-
-    const promptSchema = {
-        type: Type.OBJECT,
-    };
 
     try {
         const result = await ai.models.generateContent({
@@ -701,9 +697,9 @@ async function processSingleSourceTest(source, reportRef, ai) {
             },
         });
 
-        const calls = result.response.functionCalls();
+        const calls = result.response?.functionCalls();
         if (!calls || calls.length === 0) {
-            throw new Error("AI did not return a function call as expected.");
+            throw new Error("AI did not return a function call as expected. Result: " + JSON.stringify(result));
         }
         const suggestionsData = calls[0].args;
 
@@ -711,7 +707,7 @@ async function processSingleSourceTest(source, reportRef, ai) {
             throw new Error("AI returned no suggestions for this source.");
         }
 
-        const suggestion = result.suggestions[0];
+        const suggestion = suggestionsData.suggestions[0];
 
         const existingArticle = await db.collection('articles').where('sourceUrl', '==', suggestion.sourceUrl).limit(1).get();
         if (!existingArticle.empty) {
@@ -746,7 +742,7 @@ async function processSingleSourceTest(source, reportRef, ai) {
         console.log(`[Source Test] SUCCESS for ${domain}: ${suggestion.title}`);
 
     } catch (error) {
-        console.error(`[Source Test] FAILED for ${domain}:`, error.message);
+        console.error(`[Source Test] FAILED for ${domain}:`, error);
         await reportResultsRef.doc(docId).set({
             ...source,
             status: 'Failure',
@@ -845,6 +841,8 @@ export const testSampleSources = onCall({
         throw new HttpsError('permission-denied', 'Only admins can run this source test.');
     }
 
+    console.log("[Source Sample Test] Request received:", request);
+
     console.log(`[Source Sample Test] Starting test run, initiated by ${userDoc.data().email}.`);
     const geminiApiKey = process.env.GEMINI_API_KEY;
     const ai = new GoogleGenAI({ apiKey: geminiApiKey });
@@ -860,7 +858,7 @@ export const testSampleSources = onCall({
         triggeredBy: userDoc.data().email,
     });
 
-    const sourcesToTest = [];
+    let sourcesToTest = [];
     const pillars = Object.keys(SOURCE_REGISTRY.sources);
     for (const pillar of pillars) {
         const pillarData = SOURCE_REGISTRY.sources[pillar];
@@ -937,6 +935,8 @@ export const generateImage = onCall({
         throw new HttpsError('internal', 'Failed to generate image.', error.message);
     }
 });
+
+
 
 export const processArticle = onTaskDispatched(
     {
