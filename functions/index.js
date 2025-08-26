@@ -643,6 +643,7 @@ export const discoverTopics = onSchedule({
  */
 async function processSingleSourceTest(source, reportRef, ai) {
     const { domain, pillar, region } = source;
+
     const reportResultsRef = reportRef.collection('results');
     const docId = domain.replace(/[^a-zA-Z0-9.-]/g, '_');
 
@@ -684,6 +685,7 @@ If no article is found, call it with { "suggestions": [] }.
 `;
 
     try {
+
         const model = ai.getGenerativeModel({
             model: GEMINI_MODEL,
             systemInstruction: { parts: [{ text: GLOBAL_SYSTEM_PROMPT }] },
@@ -805,6 +807,11 @@ export const testAllSources = onCall({
     const geminiApiKey = process.env.GEMINI_API_KEY;
     const ai = new GoogleGenAI(geminiApiKey);
 
+    if (!ai) {
+        console.error("[Source Test] Failed to initialize GoogleGenAI. Gemini API key might be missing or invalid.");
+        throw new Error("Failed to initialize GoogleGenAI.");
+    }
+
     const reportRef = db.collection('sourceTestReports').doc();
     await reportRef.set({
         status: 'Running',
@@ -876,6 +883,11 @@ export const testSampleSources = onCall({
     console.log(`[Source Sample Test] Starting test run, initiated by ${userDoc.data().email}.`);
     const geminiApiKey = process.env.GEMINI_API_KEY;
     const ai = new GoogleGenAI(geminiApiKey);
+
+    if (!ai) {
+        console.error("[Source Sample Test] Failed to initialize GoogleGenAI. Gemini API key might be missing or invalid.");
+        throw new Error("Failed to initialize GoogleGenAI.");
+    }
 
     const reportRef = db.collection('sourceTestReports').doc();
     await reportRef.set({
