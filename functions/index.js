@@ -5,7 +5,7 @@ import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import admin from "firebase-admin";
 import { getFunctions } from "firebase-admin/functions";
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenerativeAI, Type } from "@google/genai";
 import SOURCE_REGISTRY from "./source-registry.json" with { type: "json" };
 
 // A global system prompt to enforce quality, tone, and sourcing rules across all AI interactions.
@@ -103,7 +103,18 @@ const SUPPORTED_CATEGORIES = [
 async function performContentGeneration(articleId, data, geminiApiKey) {
     console.log(`[${articleId}] Starting content generation for: "${data.title}" of type "${data.articleType}"`);
     
-    const ai = new GoogleGenAI(geminiApiKey);
+    if (!geminiApiKey) {
+        console.error(`[${articleId}] GEMINI_API_KEY is not provided`);
+        throw new Error('GEMINI_API_KEY is required for content generation');
+    }
+    
+    const ai = new GoogleGenerativeAI(geminiApiKey);
+    
+    if (!ai || typeof ai.getGenerativeModel !== 'function') {
+        console.error(`[${articleId}] Failed to initialize GoogleGenerativeAI instance`);
+        throw new Error('Failed to initialize AI model');
+    }
+    
     const { title, categories, shortDescription, articleType, sourceUrl } = data;
 
     try {
@@ -459,7 +470,7 @@ export const regenerateArticleContent = onCall({
 /**
  * Processes a single discovery configuration to find and save new topic suggestions.
  * @param {object} config The discovery configuration object.
- * @param {GoogleGenAI} ai The GoogleGenAI instance.
+ * @param {GoogleGenerativeAI} ai The GoogleGenerativeAI instance.
   * @param {FirebaseFirestore.Firestore} db The Firestore instance.
  */
 async function processDiscoveryConfig(config, ai, db, geminiApiKey) { // eslint-disable-line no-unused-vars
@@ -602,7 +613,12 @@ export const discoverTopics = onSchedule({
         return;
     }
 
-    const ai = new GoogleGenAI(geminiApiKey);
+    const ai = new GoogleGenerativeAI(geminiApiKey);
+    
+    if (!ai || typeof ai.getGenerativeModel !== 'function') {
+        console.error('Failed to initialize GoogleGenerativeAI instance for topic discovery');
+        return;
+    }
     const discoveryConfigs = [
         { articleType: 'Trending Topic', region: 'Worldwide' },
         { articleType: 'Trending Topic', region: 'USA' },
@@ -639,7 +655,7 @@ export const discoverTopics = onSchedule({
  * Logs the result to a source test report in Firestore.
  * @param {object} source - The source object { domain, pillar, region }.
  * @param {admin.firestore.DocumentReference} reportRef - The reference to the main report document.
- * @param {GoogleGenAI} ai - The GoogleGenAI instance.
+ * @param {GoogleGenerativeAI} ai - The GoogleGenerativeAI instance.
  */
 async function processSingleSourceTest(source, reportRef, ai) {
     const { domain, pillar, region } = source;
@@ -684,6 +700,11 @@ If no article is found, call it with { "suggestions": [] }.
 `;
 
     try {
+        // Validate ai parameter before using it
+        if (!ai || typeof ai.getGenerativeModel !== 'function') {
+            throw new Error(`Invalid AI instance passed to processSingleSourceTest for ${domain}. AI instance: ${typeof ai}`);
+        }
+        
         const model = ai.getGenerativeModel({
             model: GEMINI_MODEL,
             systemInstruction: { parts: [{ text: GLOBAL_SYSTEM_PROMPT }] },
@@ -803,7 +824,18 @@ export const testAllSources = onCall({
 
     console.log(`[Source Test] Starting test run, initiated by ${userDoc.data().email}.`);
     const geminiApiKey = process.env.GEMINI_API_KEY;
-    const ai = new GoogleGenAI(geminiApiKey);
+    
+    if (!geminiApiKey) {
+        console.error('[Source Test] GEMINI_API_KEY environment variable is not set');
+        throw new HttpsError('internal', 'GEMINI_API_KEY environment variable is not configured');
+    }
+    
+    const ai = new GoogleGenerativeAI(geminiApiKey);
+    
+    if (!ai || typeof ai.getGenerativeModel !== 'function') {
+        console.error('[Source Test] Failed to initialize GoogleGenerativeAI instance');
+        throw new HttpsError('internal', 'Failed to initialize AI model');
+    }
 
     const reportRef = db.collection('sourceTestReports').doc();
     await reportRef.set({
@@ -875,7 +907,18 @@ export const testSampleSources = onCall({
 
     console.log(`[Source Sample Test] Starting test run, initiated by ${userDoc.data().email}.`);
     const geminiApiKey = process.env.GEMINI_API_KEY;
-    const ai = new GoogleGenAI(geminiApiKey);
+    
+    if (!geminiApiKey) {
+        console.error('[Source Sample Test] GEMINI_API_KEY environment variable is not set');
+        throw new HttpsError('internal', 'GEMINI_API_KEY environment variable is not configured');
+    }
+    
+    const ai = new GoogleGenerativeAI(geminiApiKey);
+    
+    if (!ai || typeof ai.getGenerativeModel !== 'function') {
+        console.error('[Source Sample Test] Failed to initialize GoogleGenerativeAI instance');
+        throw new HttpsError('internal', 'Failed to initialize AI model');
+    }
 
     const reportRef = db.collection('sourceTestReports').doc();
     await reportRef.set({
