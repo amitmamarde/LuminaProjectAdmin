@@ -103,7 +103,7 @@ const SUPPORTED_CATEGORIES = [
 async function performContentGeneration(articleId, data, geminiApiKey) {
     console.log(`[${articleId}] Starting content generation for: "${data.title}" of type "${data.articleType}"`);
     
-    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+    const ai = new GoogleGenAI(geminiApiKey);
     const { title, categories, shortDescription, articleType, sourceUrl } = data;
 
     try {
@@ -177,17 +177,17 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
       }
 
       console.log(`[${articleId}] Calling Gemini API...`);
-      const textResponse = await ai.models.generateContent({
+      const model = ai.getGenerativeModel({
         model: GEMINI_MODEL,
         systemInstruction: { parts: [{ text: GLOBAL_SYSTEM_PROMPT }] },
-          contents: [{ parts: [{ text: textPrompt }] }],
-        config: {
+        generationConfig: {
           responseMimeType: "application/json",
           responseSchema: responseSchema,
         },
       });
+      const result = await model.generateContent(textPrompt);
 
-      const jsonString = textResponse.text.trim();
+      const jsonString = result.response.text().trim();
       const generatedText = JSON.parse(jsonString);
       console.log(`[${articleId}] Successfully generated content from API.`);
  
@@ -483,29 +483,29 @@ async function processDiscoveryConfig(config, ai, db, geminiApiKey) { // eslint-
     }
 
     // 2. Construct a single, powerful prompt for discovery.
-    const discoveryPrompt = `
-    Your task is to discover up to 5 new, distinct, and relevant stories for the content pillar "${config.articleType}" in the region "${config.region}".
-    Your ONLY valid output is a function call to the 'save_suggestions' tool. Do not output any other text or JSON.
+    const discoveryPrompt = `Your task is to discover up to 5 new, distinct, and relevant stories for the content pillar "${config.articleType}" in the region "${config.region}".
 
-    ALLOWED DOMAINS:
-    ${JSON.stringify(allowedDomains)}
+STRICT OUTPUT INSTRUCTIONS:
+- Your ONLY valid output is a function call to the 'save_suggestions' tool.
+- Do NOT output any other text, explanations, or code blocks (like \`\`\`json or \`\`\`python).
+- If you find articles, call the tool with an array of suggestion objects.
+- If you find NO suitable articles, you MUST call the tool with an empty array: save_suggestions(suggestions=[]).
 
-    TASK:
-    1.  Use Google Search with "site:" filters for the domains listed above to find stories published or updated in the last 72 hours.
-    2.  For 'Positive News', find uplifting stories. For 'Trending Topic', find globally relevant news. For 'Misinformation', find recently debunked claims.
-    3.  For each story found, extract its title, a short description, relevant categories from the list below, the source URL, and the source title.
-    4.  Ensure stories are unique. Use the EXACT URL from the source.
-    5.  Call the 'save_suggestions' function with an array of all the suggestion objects you found.
-    6.  If you find no suitable stories, call 'save_suggestions' with an empty array.
-    Categories list: ${JSON.stringify(SUPPORTED_CATEGORIES)}.
-    `;
+SEARCH CRITERIA & TASK:
+1.  Use Google Search with "site:" filters for the domains listed below to find stories published or updated in the last 72 hours.
+2.  For 'Positive News', find uplifting stories. For 'Trending Topic', find globally relevant news. For 'Misinformation', find recently debunked claims.
+3.  For each story found, extract its title, a short description, relevant categories, the source URL, and the source title.
+4.  Ensure stories are unique. Use the EXACT URL from the source.
+5.  Call the 'save_suggestions' function with an array of all the suggestion objects you found.
+
+ALLOWED DOMAINS: ${JSON.stringify(allowedDomains)}
+CATEGORIES LIST: ${JSON.stringify(SUPPORTED_CATEGORIES)}`;
 
     try {
         // 3. Make a single AI call that uses search and returns structured JSON.
-        const result = await ai.models.generateContent({
+        const model = ai.getGenerativeModel({
             model: GEMINI_MODEL,
             systemInstruction: { parts: [{ text: GLOBAL_SYSTEM_PROMPT }] },
-            contents: [{ parts: [{ text: discoveryPrompt }] }],
             tools: [saveSuggestionsTool, { googleSearch: {} }],
             toolConfig: {
                 functionCallingConfig: {
@@ -514,6 +514,7 @@ async function processDiscoveryConfig(config, ai, db, geminiApiKey) { // eslint-
                 },
             },
         });
+        const result = await model.generateContent(discoveryPrompt);
 
         const calls = result.response.functionCalls();
         if (!calls || calls.length === 0) {
@@ -601,7 +602,7 @@ export const discoverTopics = onSchedule({
         return;
     }
 
-    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+    const ai = new GoogleGenAI(geminiApiKey);
     const discoveryConfigs = [
         { articleType: 'Trending Topic', region: 'Worldwide' },
         { articleType: 'Trending Topic', region: 'USA' },
@@ -643,7 +644,6 @@ export const discoverTopics = onSchedule({
 async function processSingleSourceTest(source, reportRef, ai) {
     const { domain, pillar, region } = source;
     const reportResultsRef = reportRef.collection('results');
-    // Sanitize domain for a valid Firestore document ID.
     const docId = domain.replace(/[^a-zA-Z0-9.-]/g, '_');
 
     let articleType;
@@ -652,12 +652,10 @@ async function processSingleSourceTest(source, reportRef, ai) {
     else if (pillar === 'research_breakthroughs') articleType = 'Trending Topic';
     else if (pillar === 'misinformation_watch') articleType = 'Misinformation';
     else {
-        const errorMessage = `Unsupported pillar type in registry: ${pillar}`;
-        console.error(`[Source Test] FAILED for ${domain}:`, errorMessage);
         await reportResultsRef.doc(docId).set({
             ...source,
             status: 'Failure',
-            error: errorMessage,
+            error: `Unsupported pillar type: ${pillar}`,
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
         });
         await reportRef.update({ failureCount: admin.firestore.FieldValue.increment(1) });
@@ -665,93 +663,125 @@ async function processSingleSourceTest(source, reportRef, ai) {
     }
 
     const testPrompt = `
-    Your task is to find exactly ONE recent article from the domain "${domain}" that fits the content pillar "${articleType}" for the "${region}" region.
-    Your ONLY valid output is a function call to the 'save_suggestions' tool. Do not output any other text or JSON.
+Find ONE recent article from site:${domain} that is relevant to "${articleType}" in the "${region}" region.
 
-    You MUST follow these steps:
-    1.  Use Google Search with a "site:${domain}" filter to find a story published or updated in the last 7 days.
-    2.  If you find a suitable article, extract its details.
-    3.  Call the 'save_suggestions' function with the result. The result must be an array containing a single suggestion object.
+Respond ONLY by calling the "save_suggestions" function. Do not return plain text.
+The function must be called with JSON like:
 
-    The suggestion object for the tool call MUST have the following properties:
-    - "title": The full title of the article.
-    - "shortDescription": A brief, one or two-sentence summary of the article.
-    - "categories": An array containing one or more relevant categories from this list: ${JSON.stringify(SUPPORTED_CATEGORIES)}.
-    - "sourceUrl": The exact, full URL to the source article. Do not alter it.
-    - "sourceTitle": The name of the publication, which is "${domain}".
+{
+  "suggestions": [
+    {
+      "title": "Article title",
+      "sourceUrl": "https://...",
+      "sourceTitle": "${domain}",
+      "categories": ["SomeCategory"],
+      "shortDescription": "One-sentence summary."
+    }
+  ]
+}
 
-    If you cannot find any suitable article from the last 7 days, you MUST still call the 'save_suggestions' function, but with an empty "suggestions" array.
-    `;
+If no article is found, call it with { "suggestions": [] }.
+`;
 
     try {
-        const result = await ai.models.generateContent({
+        const model = ai.getGenerativeModel({
             model: GEMINI_MODEL,
             systemInstruction: { parts: [{ text: GLOBAL_SYSTEM_PROMPT }] },
-            contents: [{ parts: [{ text: testPrompt }] }],
             tools: [saveSuggestionsTool, { googleSearch: {} }],
             toolConfig: {
                 functionCallingConfig: {
-                    mode: 'ONE',
-                    allowedFunctionNames: ['save_suggestions'],
+                    mode: "ONE",
+                    allowedFunctionNames: ["save_suggestions"],
                 },
             },
         });
+        const result = await model.generateContent({
+            contents: [{ role: "user", parts: [{ text: testPrompt }] }],
+        });
 
-        const calls = result.response?.functionCalls();
-        if (!calls || calls.length === 0) {
-            throw new Error("AI did not return a function call as expected. Result: " + JSON.stringify(result));
+        const call = result.response.functionCalls()?.[0];
+
+        if (!call) {
+            const rawText = result.response.text() || "No response text.";
+            throw new Error(`AI did not call the required function. Raw response: ${rawText}`);
         }
-        const suggestionsData = calls[0].args;
 
-        if (!suggestionsData.suggestions || suggestionsData.suggestions.length === 0) {
-            throw new Error("AI returned no suggestions for this source.");
+        const suggestionsData = call.args;
+
+        // same handling logic for no articles / already exists / new draft...
+        if (suggestionsData.suggestions.length === 0) {
+            await reportResultsRef.doc(docId).set({
+                ...source,
+                status: "Success",
+                message: "No recent articles found.",
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            await reportRef.update({ successCount: admin.firestore.FieldValue.increment(1) });
+            return;
         }
 
         const suggestion = suggestionsData.suggestions[0];
-
-        const existingArticle = await db.collection('articles').where('sourceUrl', '==', suggestion.sourceUrl).limit(1).get();
-        if (!existingArticle.empty) {
-            throw new Error(`Article from this source URL already exists: ${suggestion.sourceUrl}`);
+        if (!suggestion.title || !suggestion.sourceUrl) {
+            throw new Error(`Suggestion missing fields: ${JSON.stringify(suggestion)}`);
         }
 
-        const newArticleRef = db.collection('articles').doc();
+        // continue with saving article...
+        const existingArticle = await db.collection("articles")
+            .where("sourceUrl", "==", suggestion.sourceUrl)
+            .limit(1).get();
+
+        if (!existingArticle.empty) {
+            await reportResultsRef.doc(docId).set({
+                ...source,
+                status: "Success",
+                message: "Article already exists.",
+                fetchedArticleTitle: suggestion.title,
+                fetchedArticleUrl: suggestion.sourceUrl,
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            await reportRef.update({ successCount: admin.firestore.FieldValue.increment(1) });
+            return;
+        }
+
+        const newArticleRef = db.collection("articles").doc();
         await newArticleRef.set({
             title: suggestion.title,
-            articleType: articleType,
+            articleType,
             categories: suggestion.categories || [],
-            region: region,
-            shortDescription: suggestion.shortDescription,
-            status: 'Draft',
+            region,
+            shortDescription: suggestion.shortDescription || "Discovered via source test.",
+            status: "Draft",
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             discoveredAt: admin.firestore.FieldValue.serverTimestamp(),
-            sourceUrl: suggestion.sourceUrl || null,
-            sourceTitle: suggestion.sourceTitle || suggestion.title,
-            discoveryMethod: 'SourceTest',
+            sourceUrl: suggestion.sourceUrl,
+            sourceTitle: suggestion.sourceTitle || domain,
+            discoveryMethod: "SourceTest",
             sourceTestReportId: reportRef.id,
         });
 
         await reportResultsRef.doc(docId).set({
             ...source,
-            status: 'Success',
+            status: "Success",
+            message: "Created new article draft.",
             fetchedArticleTitle: suggestion.title,
             fetchedArticleUrl: suggestion.sourceUrl,
             createdArticleId: newArticleRef.id,
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
         });
         await reportRef.update({ successCount: admin.firestore.FieldValue.increment(1) });
-        console.log(`[Source Test] SUCCESS for ${domain}: ${suggestion.title}`);
 
-    } catch (error) {
-        console.error(`[Source Test] FAILED for ${domain}:`, error);
+    } catch (err) {
+        console.error(`[Source Test] FAILED for ${domain}:`, err);
         await reportResultsRef.doc(docId).set({
             ...source,
-            status: 'Failure',
-            error: error.message,
+            status: "Failure",
+            error: err.message,
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
         });
         await reportRef.update({ failureCount: admin.firestore.FieldValue.increment(1) });
     }
 }
+
 
 /**
  * A callable function for admins to test every source in source-registry.json.
@@ -773,7 +803,7 @@ export const testAllSources = onCall({
 
     console.log(`[Source Test] Starting test run, initiated by ${userDoc.data().email}.`);
     const geminiApiKey = process.env.GEMINI_API_KEY;
-    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+    const ai = new GoogleGenAI(geminiApiKey);
 
     const reportRef = db.collection('sourceTestReports').doc();
     await reportRef.set({
@@ -845,7 +875,7 @@ export const testSampleSources = onCall({
 
     console.log(`[Source Sample Test] Starting test run, initiated by ${userDoc.data().email}.`);
     const geminiApiKey = process.env.GEMINI_API_KEY;
-    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+    const ai = new GoogleGenAI(geminiApiKey);
 
     const reportRef = db.collection('sourceTestReports').doc();
     await reportRef.set({
