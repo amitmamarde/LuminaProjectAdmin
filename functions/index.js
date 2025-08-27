@@ -6,6 +6,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import admin from "firebase-admin";
 import { getFunctions } from "firebase-admin/functions";
 import { GoogleGenAI, Type } from "@google/genai";
+import Parser from "rss-parser";
 import SOURCE_REGISTRY from "./source-registry.json" with { type: "json" };
 
 // A global system prompt to enforce quality, tone, and sourcing rules across all AI interactions.
@@ -46,6 +47,7 @@ const GEMINI_MODEL = "gemini-2.5-flash-lite";
 
 admin.initializeApp();
 const db = admin.firestore();
+const rssParser = new Parser();
 
 // A helper function to add a delay between API calls to respect rate limits.
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -457,178 +459,174 @@ export const regenerateArticleContent = onCall({
 });
 
 /**
- * Processes a single discovery configuration to find and save new topic suggestions.
- * @param {object} config The discovery configuration object.
- * @param {GoogleGenAI} ai The GoogleGenAI instance.
-  * @param {FirebaseFirestore.Firestore} db The Firestore instance.
+ * Extracts suggestion data from a Gemini API response, handling both
+ * direct function calls and JSON embedded in text.
+ * @param {object} response The `response` object from the Gemini API call.
+ * @param {string} context A string for logging (e.g., the domain being tested).
+ * @returns {object|null} The suggestions data object or null if not found.
  */
-async function processDiscoveryConfig(config, ai, db, geminiApiKey) { // eslint-disable-line no-unused-vars
-    console.log(`Discovering ${config.articleType} for ${config.region}...`);
-
-    // 1. Select the correct sources from the registry based on the config.
-    let pillarKey;
-    if (config.articleType === 'Positive News') pillarKey = 'positive_news';
-    else if (config.articleType === 'Trending Topic') pillarKey = 'general_quality_news'; // Map "Trending" to general news sources
-    else if (config.articleType === 'Misinformation') pillarKey = 'misinformation_watch';
-    else return; // Should not happen with current configs
-
-    const regionKey = config.region.toLowerCase() === 'worldwide' ? 'global' : config.region.toLowerCase();
-    const sourcesForPillar = SOURCE_REGISTRY.sources[pillarKey];
-    // Fallback to global sources if region-specific ones don't exist
-    const allowedDomains = sourcesForPillar?.[regionKey]?.allowlist || sourcesForPillar?.global?.allowlist || [];
-
-    if (allowedDomains.length === 0) {
-        console.log(`No sources configured in source-registry.json for ${config.articleType} in ${config.region}. Skipping.`);
-        return;
+function getSuggestionsFromApiResponse(response, context) {
+    const calls = response?.functionCalls();
+    if (calls && calls.length > 0) {
+        console.log(`[Parser] Extracted suggestions for "${context}" via direct function call.`);
+        return calls[0].args;
     }
 
-    // 2. Construct a single, powerful prompt for discovery.
-    const discoveryPrompt = `
-    Your task is to discover up to 5 new, distinct, and relevant stories for the content pillar "${config.articleType}" in the region "${config.region}".
-    Your ONLY valid output is a function call to the 'save_suggestions' tool. Do not output any other text or JSON.
+    const textResponse = response?.text();
+    if (!textResponse) {
+        console.log(`[Parser] No function call or text response for "${context}".`);
+        return null;
+    }
 
-    ALLOWED DOMAINS:
-    ${JSON.stringify(allowedDomains)}
+    // Regex to find a JSON block inside ```json ... ``` or a raw JSON array/object
+    const jsonRegex = /```json\s*([\s\S]*?)\s*```|(\[[\s\S]*\]|\{[\s\S]*\s*\})/;
+    const match = textResponse.match(jsonRegex);
+    let jsonString = match ? (match[1] || match[2])?.trim() : null;
 
-    TASK:
-    1.  Use Google Search with "site:" filters for the domains listed above to find stories published or updated in the last 72 hours.
-    2.  For 'Positive News', find uplifting stories. For 'Trending Topic', find globally relevant news. For 'Misinformation', find recently debunked claims.
-    3.  For each story found, extract its title, a short description, relevant categories from the list below, the source URL, and the source title.
-    4.  Ensure stories are unique. Use the EXACT URL from the source.
-    5.  Call the 'save_suggestions' function with an array of all the suggestion objects you found.
-    6.  If you find no suitable stories, call 'save_suggestions' with an empty array.
-    Categories list: ${JSON.stringify(SUPPORTED_CATEGORIES)}.
-    `;
+    if (jsonString) {
+        try {
+            // Handle if the model includes the function call name
+            const functionCallRegex = /^\s*save_suggestions\(([\s\S]*)\)\s*$/;
+            const functionMatch = jsonString.match(functionCallRegex);
+            if (functionMatch && functionMatch[1]) {
+                jsonString = functionMatch[1];
+            }
+
+            const parsed = JSON.parse(jsonString);
+
+            if (Array.isArray(parsed)) {
+                console.log(`[Parser] Extracted suggestions for "${context}" by parsing a JSON array from text.`);
+                return { suggestions: parsed };
+            } else if (parsed.suggestions && Array.isArray(parsed.suggestions)) {
+                console.log(`[Parser] Extracted suggestions for "${context}" by parsing a suggestions object from text.`);
+                return parsed;
+            }
+        } catch (e) {
+            console.warn(`[Parser] Could not parse extracted JSON-like string for "${context}". Error: ${e.message}`);
+        }
+    }
+    return null;
+}
+
+/**
+ * Processes a single RSS feed to find and create new article drafts.
+ * @param {object} source The source object from the registry, including rssUrl.
+ */
+async function processRssFeed(source) {
+    const { rssUrl, pillar, region, domain } = source;
+    console.log(`[RSS] Processing feed for ${domain} in ${region}`);
 
     try {
-        // 3. Make a single AI call that uses search and returns structured JSON.
-        const result = await ai.models.generateContent({
-            model: GEMINI_MODEL,
-            systemInstruction: { parts: [{ text: GLOBAL_SYSTEM_PROMPT }] },
-            contents: [{ parts: [{ text: discoveryPrompt }] }],
-            tools: [saveSuggestionsTool, { googleSearch: {} }],
-            toolConfig: {
-                functionCallingConfig: {
-                    mode: 'ONE',
-                    allowedFunctionNames: ['save_suggestions'],
-                },
-            },
-        });
-
-        const calls = result.response.functionCalls();
-        if (!calls || calls.length === 0) {
-            console.log(`[Discovery] AI did not return any suggestions for ${config.articleType} in ${config.region}.`);
+        const feed = await rssParser.parseURL(rssUrl);
+        if (!feed.items || feed.items.length === 0) {
+            console.log(`[RSS] No items found in feed for ${domain}`);
             return;
         }
-        const suggestionsData = calls[0].args;
 
-        if (suggestionsData.suggestions && suggestionsData.suggestions.length > 0) {
-            let newArticleCount = 0;
- 
-            const validSuggestions = suggestionsData.suggestions.filter(suggestion => 
-                suggestion.title && typeof suggestion.title === 'string' && suggestion.title.trim() !== ''
-            );
+        let newArticleCount = 0;
+        // Limit to the 5 most recent articles from the feed to avoid large writes
+        const recentItems = feed.items.slice(0, 5);
 
-            if (validSuggestions.length > 0) {
-                const titles = validSuggestions.map(s => s.title);
-                // Check against 'articles' collection for duplicates to avoid re-creating content.
-                const existingArticlesQuery = db.collection('articles')
-                    .where('title', 'in', titles)
-                    .where('region', '==', config.region)
-                    .where('articleType', '==', config.articleType);
-
-                const existingArticlesSnapshot = await existingArticlesQuery.get();
-                const existingTitles = new Set(existingArticlesSnapshot.docs.map(doc => doc.data().title));
-
-                for (const suggestion of validSuggestions) {
-                    if (existingTitles.has(suggestion.title)) {
-                        console.log(`[Discovery] Skipping duplicate article: "${suggestion.title}"`);
-                        continue;
-                    }
-
-                    // Create a new article document and immediately trigger its generation.
-                    const newArticleRef = db.collection('articles').doc();
-                    const articleData = {
-                        title: suggestion.title,
-                        articleType: config.articleType,
-                        categories: suggestion.categories || [],
-                        region: config.region,
-                        shortDescription: suggestion.shortDescription,
-                        // Set status to 'Draft'. The onDocumentCreated trigger
-                        // will automatically queue it for generation.
-                        status: 'Draft',
-                        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                        discoveredAt: admin.firestore.FieldValue.serverTimestamp(),
-                        sourceUrl: suggestion.sourceUrl || null,
-                        sourceTitle: suggestion.sourceTitle || null,
-                    };
-
-                    // By setting the document with status 'Draft', we allow the
-                    // `generateArticleContent` trigger to handle the queueing.
-                    await newArticleRef.set(articleData);
-                    console.log(`[${newArticleRef.id}] Created new article draft for "${suggestion.title}". It will be queued for generation.`);
-                    newArticleCount++;
-                }
+        for (const item of recentItems) {
+            const sourceUrl = item.link;
+            if (!sourceUrl) {
+                console.warn(`[RSS] Skipping item with no link from ${domain}: "${item.title}"`);
+                continue;
             }
 
-            if (newArticleCount > 0) {
-                console.log(`Successfully discovered and generated content for ${newArticleCount} new articles for ${config.articleType} in ${config.region}.`);
-            } else {
-                console.log(`No new, unique articles were generated for ${config.articleType} in ${config.region}.`);
+            // Check for duplicates based on the source URL
+            const existingArticleQuery = db.collection('articles').where('sourceUrl', '==', sourceUrl).limit(1);
+            const existingSnapshot = await existingArticleQuery.get();
+
+            if (!existingSnapshot.empty) {
+                // console.log(`[RSS] Skipping duplicate article from ${domain}: "${item.title}"`);
+                continue;
             }
+
+            // Map pillar to ArticleType
+            let articleType;
+            if (pillar === 'positive_news') articleType = 'Positive News';
+            else if (pillar === 'general_quality_news' || pillar === 'research_breakthroughs') articleType = 'Trending Topic';
+            else if (pillar === 'misinformation_watch') articleType = 'Misinformation';
+            else continue; // Skip unknown pillars
+
+            // Create new article draft
+            const newArticleRef = db.collection('articles').doc();
+            const articleData = {
+                title: item.title || 'Untitled',
+                articleType: articleType,
+                categories: item.categories || [],
+                region: region,
+                // Use contentSnippet or description, fallback to empty string
+                shortDescription: item.contentSnippet || item.content || '',
+                // Set status to 'Draft'. The onDocumentCreated trigger
+                // will automatically queue it for generation.
+                status: 'Draft',
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                discoveredAt: item.isoDate ? new Date(item.isoDate) : admin.firestore.FieldValue.serverTimestamp(),
+                sourceUrl: sourceUrl,
+                sourceTitle: feed.title || domain,
+                discoveryMethod: 'RSS',
+            };
+
+            await newArticleRef.set(articleData);
+            console.log(`[${newArticleRef.id}] Created new draft from RSS feed for "${item.title}"`);
+            newArticleCount++;
         }
+
+        if (newArticleCount > 0) {
+            console.log(`[RSS] Successfully created ${newArticleCount} new drafts from ${domain}.`);
+        }
+
     } catch (error) {
-        console.error(`Failed to discover topics for ${config.articleType} in ${config.region}:`, error);
-        // Re-throw the error so that Promise.allSettled can capture the failure.
+        console.error(`[RSS] Failed to process feed for ${domain} at ${rssUrl}:`, error.message);
         throw error;
     }
 }
 
 /**
- * This scheduled Cloud Function runs every 6 hours to automatically discover trending topics
-  * and positive news stories using a search-grounded AI model.
+ * This scheduled Cloud Function runs periodically to discover new articles
+ * by polling RSS feeds from the source registry.
  */
 export const discoverTopics = onSchedule({
     schedule: "every 24 hours",
     region: "europe-west1",
     secrets: ["GEMINI_API_KEY"],
 }, async (event) => {
-    console.log("Running scheduled topic discovery...");
-    const geminiApiKey = process.env.GEMINI_API_KEY;
+    console.log("Running scheduled RSS topic discovery...");
 
-    if (!geminiApiKey) {
-        console.error("Cannot discover topics: Gemini API key is not configured in secrets.");
-        return;
+    const allSources = [];
+    // 1. Flatten all sources from the registry into a single list
+    for (const pillar in SOURCE_REGISTRY.sources) {
+        if (!Object.prototype.hasOwnProperty.call(SOURCE_REGISTRY.sources, pillar)) continue;
+        for (const region in SOURCE_REGISTRY.sources[pillar]) {
+            if (!Object.prototype.hasOwnProperty.call(SOURCE_REGISTRY.sources[pillar], region) || region === 'notes') continue;
+            
+            const allowlist = SOURCE_REGISTRY.sources[pillar][region].allowlist || [];
+            for (const source of allowlist) {
+                if (source.rssUrl) {
+                    allSources.push({
+                        ...source, // contains domain and rssUrl
+                        pillar,
+                        region,
+                    });
+                }
+            }
+        }
     }
 
-    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-    const discoveryConfigs = [
-        { articleType: 'Trending Topic', region: 'Worldwide' },
-        { articleType: 'Trending Topic', region: 'USA' },
-        { articleType: 'Trending Topic', region: 'India' },
-        { articleType: 'Trending Topic', region: 'Europe' },
-        { articleType: 'Positive News', region: 'Worldwide' },
-        { articleType: 'Positive News', region: 'USA' },
-        { articleType: 'Positive News', region: 'India' },
-        { articleType: 'Positive News', region: 'Europe' },
-        { articleType: 'Misinformation', region: 'Worldwide' },
-    ];
-
-    // We can process these in parallel to speed up the discovery process.
-    // Note: This runs discovery jobs in parallel, but the source tests run sequentially.
-    const discoveryPromises = discoveryConfigs.map(config => 
-        processDiscoveryConfig(config, ai, db, geminiApiKey)
-    );
+    // 2. Process each source feed in parallel.
+    const discoveryPromises = allSources.map(source => processRssFeed(source));
 
     const results = await Promise.allSettled(discoveryPromises);
 
     console.log("Scheduled topic discovery complete. Summary:");
     results.forEach((result, index) => {
-        const config = discoveryConfigs[index];
+        const source = allSources[index];
         if (result.status === 'fulfilled') {
-            console.log(`  [SUCCESS] ${config.articleType} in ${config.region}`);
+            console.log(`  [SUCCESS] ${source.domain} in ${source.region}`);
         } else {
-            console.error(`  [FAILED]  ${config.articleType} in ${config.region}:`, result.reason.message);
+            console.error(`  [FAILED]  ${source.domain} in ${source.region}:`, result.reason.message);
         }
     });
 });
@@ -697,21 +695,33 @@ async function processSingleSourceTest(source, reportRef, ai) {
             },
         });
 
-        const calls = result.response?.functionCalls();
-        if (!calls || calls.length === 0) {
-            throw new Error("AI did not return a function call as expected. Result: " + JSON.stringify(result));
-        }
-        const suggestionsData = calls[0].args;
+        const suggestionsData = getSuggestionsFromApiResponse(result.response, domain);
 
+        if (!suggestionsData) {
+            throw new Error("AI did not return a function call or parsable JSON. Result: " + JSON.stringify(result.response));
+        }
+
+        // This is a valid success case: the source is working but has no new articles.
         if (!suggestionsData.suggestions || suggestionsData.suggestions.length === 0) {
-            throw new Error("AI returned no suggestions for this source.");
+            await reportResultsRef.doc(docId).set({
+                ...source,
+                status: 'Success',
+                fetchedArticleTitle: 'No new articles found',
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            await reportRef.update({ successCount: admin.firestore.FieldValue.increment(1) });
+            console.log(`[Source Test] SUCCESS for ${domain}: No new articles found, which is a valid outcome.`);
+            return;
         }
 
         const suggestion = suggestionsData.suggestions[0];
 
         const existingArticle = await db.collection('articles').where('sourceUrl', '==', suggestion.sourceUrl).limit(1).get();
         if (!existingArticle.empty) {
-            throw new Error(`Article from this source URL already exists: ${suggestion.sourceUrl}`);
+            console.log(`[Source Test] SUCCESS for ${domain}, but article already exists: ${suggestion.sourceUrl}`);
+            await reportResultsRef.doc(docId).set({ ...source, status: 'Success (Duplicate)', fetchedArticleTitle: suggestion.title, fetchedArticleUrl: suggestion.sourceUrl, createdArticleId: existingArticle.docs[0].id, timestamp: admin.firestore.FieldValue.serverTimestamp() });
+            await reportRef.update({ successCount: admin.firestore.FieldValue.increment(1) });
+            return;
         }
 
         const newArticleRef = db.collection('articles').doc();
@@ -746,6 +756,46 @@ async function processSingleSourceTest(source, reportRef, ai) {
         await reportResultsRef.doc(docId).set({
             ...source,
             status: 'Failure',
+            error: error.message,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await reportRef.update({ failureCount: admin.firestore.FieldValue.increment(1) });
+    }
+}
+
+/**
+ * Processes a single RSS feed as a test and logs the result to a report.
+ * @param {object} source - The source object { domain, rssUrl, pillar, region }.
+ * @param {admin.firestore.DocumentReference} reportRef - The reference to the main report document.
+ */
+async function processSingleRssFeedTest(source, reportRef) {
+    const { domain } = source;
+    const reportResultsRef = reportRef.collection('results');
+    // Sanitize domain for a valid Firestore document ID and add suffix to avoid collisions.
+    const docId = domain.replace(/[^a-zA-Z0-9.-]/g, '_') + '_rss';
+
+    try {
+        // processRssFeed creates articles but doesn't return a summary of what it did.
+        // We rely on its internal logging for details and just capture success/failure here.
+        await processRssFeed(source);
+
+        // If processRssFeed completes without throwing an error, it's a success.
+        await reportResultsRef.doc(docId).set({
+            ...source,
+            status: 'Success',
+            testMethod: 'RSS',
+            details: 'Feed processed successfully. Check server logs for details on articles created.',
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await reportRef.update({ successCount: admin.firestore.FieldValue.increment(1) });
+        console.log(`[RSS Test] SUCCESS for ${source.domain}`);
+
+    } catch (error) {
+        console.error(`[RSS Test] FAILED for ${source.domain}:`, error);
+        await reportResultsRef.doc(docId).set({
+            ...source,
+            status: 'Failure',
+            testMethod: 'RSS',
             error: error.message,
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
         });
@@ -795,8 +845,8 @@ export const testAllSources = onCall({
             if (region === 'notes') continue;
             const regionData = pillarData[region];
             if (regionData.allowlist && Array.isArray(regionData.allowlist)) {
-                for (const domain of regionData.allowlist) {
-                    sourcesToTest.push({ domain, pillar, region });
+                for (const source of regionData.allowlist) {
+                    sourcesToTest.push({ domain: source.domain, pillar, region });
                 }
             }
         }
@@ -868,8 +918,8 @@ export const testSampleSources = onCall({
             const regionData = pillarData[region];
             if (regionData.allowlist && Array.isArray(regionData.allowlist) && regionData.allowlist.length > 0) {
                 // Take the first source from each list as a sample.
-                const sampleDomain = regionData.allowlist[0];
-                sourcesToTest.push({ domain: sampleDomain, pillar, region });
+                const sampleSource = regionData.allowlist[0];
+                sourcesToTest.push({ domain: sampleSource.domain, pillar, region });
             }
         }
     }
@@ -891,6 +941,72 @@ export const testSampleSources = onCall({
 
     const summary = `Source sample test completed. Report ID: ${reportRef.id}. Success: ${finalData.successCount}, Failure: ${finalData.failureCount}`;
     console.log(`[Source Sample Test] ${summary}`);
+    return { success: true, message: summary, reportId: reportRef.id };
+});
+
+/**
+ * A callable function for admins to test a sample of RSS feeds from source-registry.json.
+ * It selects one source with an RSS feed per pillar/region combination.
+ * It generates a report in Firestore under the `sourceTestReports` collection.
+ */
+export const testSampleRssFeeds = onCall({
+    region: "europe-west1",
+    cors: [/luminaprojectadmin\.netlify\.app$/, "http://localhost:5173"],
+    timeoutSeconds: 180, // Shorter timeout for a smaller sample.
+}, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+    }
+    const userDoc = await db.collection('users').doc(request.auth.uid).get();
+    if (!userDoc.exists || userDoc.data().role !== 'Admin') {
+        throw new HttpsError('permission-denied', 'Only admins can run this source test.');
+    }
+
+    console.log(`[RSS Sample Test] Starting test run, initiated by ${userDoc.data().email}.`);
+
+    const reportRef = db.collection('sourceTestReports').doc();
+    await reportRef.set({
+        status: 'Running',
+        testType: 'RSS Sample',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        totalSources: 0,
+        successCount: 0,
+        failureCount: 0,
+        triggeredBy: userDoc.data().email,
+    });
+
+    const sourcesToTest = [];
+    const pillars = Object.keys(SOURCE_REGISTRY.sources);
+    for (const pillar of pillars) {
+        const pillarData = SOURCE_REGISTRY.sources[pillar];
+        const regions = Object.keys(pillarData);
+        for (const region of regions) {
+            if (region === 'notes') continue;
+            const regionData = pillarData[region];
+            if (regionData.allowlist && Array.isArray(regionData.allowlist) && regionData.allowlist.length > 0) {
+                // Find the first source from each list that has an rssUrl.
+                const sampleSourceWithRss = regionData.allowlist.find(s => s.rssUrl);
+                if (sampleSourceWithRss) {
+                    sourcesToTest.push({ ...sampleSourceWithRss, pillar, region });
+                }
+            }
+        }
+    }
+
+    await reportRef.update({ totalSources: sourcesToTest.length });
+
+    // Process each source sequentially.
+    for (const source of sourcesToTest) {
+        await processSingleRssFeedTest(source, reportRef);
+        await delay(200); // Small delay between requests.
+    }
+
+    const finalReportSnap = await reportRef.get();
+    const finalData = finalReportSnap.data();
+    await reportRef.update({ status: 'Completed', completedAt: admin.firestore.FieldValue.serverTimestamp() });
+
+    const summary = `RSS sample test completed. Report ID: ${reportRef.id}. Success: ${finalData.successCount}, Failure: ${finalData.failureCount}`;
+    console.log(`[RSS Sample Test] ${summary}`);
     return { success: true, message: summary, reportId: reportRef.id };
 });
 /**

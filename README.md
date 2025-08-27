@@ -73,11 +73,11 @@ This function acts as an automated content scout, finding new potential article 
 -   **Purpose:** To periodically find new trending topics, positive news, and misinformation claims from vetted sources.
 -   **Trigger:** Runs on a fixed schedule (every 24 hours).
 -   **Workflow:**
-    1.  **Iterates Discovery Jobs:** Loops through a list of configurations, targeting different regions (Worldwide, USA, India, etc.) and article types ('Positive News', 'Misinformation', etc.).
-    2.  **Performs Constrained Search:** For each job, it constructs a detailed prompt that instructs the Gemini API to search *only* within a pre-approved list of websites defined in `source-registry.json`. This ensures all discovered content comes from high-quality, vetted sources.
-    3.  **Extracts and Structures Data:** The AI uses its `googleSearch` tool with the source constraints and returns a clean JSON structure containing the story title, description, categories, and the exact source URL.
-    4.  **Prevents Duplicates:** Before creating a new article, it queries the `articles` collection to ensure an article with the same title, region, and type doesn't already exist.
-    5.  **Creates and Generates Article:** For each new, unique topic, it creates a new document in the `articles` collection. It then **directly calls** the `performContentGeneration` logic to write the content in the same execution, fully automating the pipeline from discovery to a draft ready for review or auto-publication. This bypasses the task queue to ensure discovered content is processed immediately.
+    1.  **Gathers RSS Feeds:** It iterates through the `source-registry.json` file and collects all sources that have an `rssUrl` defined.
+    2.  **Processes Feeds:** For each RSS feed, it fetches and parses the content in parallel.
+    3.  **Checks for Recent Articles:** It looks at the 5 most recent items from each feed.
+    4.  **Prevents Duplicates:** For each recent item, it checks Firestore to see if an article with the same source URL already exists.
+    5.  **Creates Drafts:** If an article is new, it creates a new document in the `articles` collection with a status of `Draft`. This new document then automatically triggers the `generateArticleContent` function to queue it for content generation.
 
 ---
 
