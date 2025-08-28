@@ -5,7 +5,7 @@ import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import admin from "firebase-admin";
 import { getFunctions } from "firebase-admin/functions";
-import { GoogleGenerativeAI, Type } from "@google/genai";
+import { GoogleGenerativeAI, FunctionDeclarationSchemaType } from "@google/generative-ai";
 import Parser from "rss-parser";
 import SOURCE_REGISTRY from "./source-registry.json" with { type: "json" };
 
@@ -60,19 +60,19 @@ const saveSuggestionsTool = {
             name: "save_suggestions",
             description: "Saves a list of discovered article suggestions.",
             parameters: {
-                type: Type.OBJECT,
+                type: FunctionDeclarationSchemaType.OBJECT,
                 properties: {
                     suggestions: {
-                        type: Type.ARRAY,
+                        type: FunctionDeclarationSchemaType.ARRAY,
                         description: "A list of article suggestions found.",
                         items: {
-                            type: Type.OBJECT,
+                            type: FunctionDeclarationSchemaType.OBJECT,
                             properties: {
-                                title: { type: Type.STRING, description: "The title of the article." },
-                                shortDescription: { type: Type.STRING, description: "A brief summary of the article." },
-                                categories: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Relevant categories for the article." },
-                                sourceUrl: { type: Type.STRING, description: "The direct URL to the source article." },
-                                sourceTitle: { type: Type.STRING, description: "The title of the source publication or website." },
+                                title: { type: FunctionDeclarationSchemaType.STRING, description: "The title of the article." },
+                                shortDescription: { type: FunctionDeclarationSchemaType.STRING, description: "A brief summary of the article." },
+                                categories: { type: FunctionDeclarationSchemaType.ARRAY, items: { type: FunctionDeclarationSchemaType.STRING }, description: "Relevant categories for the article." },
+                                sourceUrl: { type: FunctionDeclarationSchemaType.STRING, description: "The direct URL to the source article." },
+                                sourceTitle: { type: FunctionDeclarationSchemaType.STRING, description: "The title of the source publication or website." },
                             },
                             required: ["title", "shortDescription", "categories", "sourceUrl"]
                         }
@@ -156,10 +156,10 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
         Do not include any other text or explanations outside of the single JSON object.`;
 
         responseSchema = {
-          type: Type.OBJECT,
+          type: "OBJECT",
           properties: {
-            flashContent: { type: Type.STRING },
-            imagePrompt: { type: Type.STRING },
+            flashContent: { type: "STRING" },
+            imagePrompt: { type: "STRING" },
           },
           required: ["flashContent", "imagePrompt"],
         };
@@ -185,11 +185,11 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
         Do not include any other text or explanations outside of the single JSON object.`;
 
         responseSchema = {
-          type: Type.OBJECT,
+          type: "OBJECT",
           properties: {
-            flashContent: { type: Type.STRING },
-            deepDiveContent: { type: Type.STRING },
-            imagePrompt: { type: Type.STRING },
+            flashContent: { type: "STRING" },
+            deepDiveContent: { type: "STRING" },
+            imagePrompt: { type: "STRING" },
           },
           required: ["flashContent", "deepDiveContent", "imagePrompt"],
         };
