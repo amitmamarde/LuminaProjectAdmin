@@ -541,6 +541,26 @@ const DashboardPage: React.FC = () => {
         }
     };
 
+    const handleMicroSampleTestSource = async () => {
+        if (!window.confirm('This will test 2 hardcoded sources (2 articles each) to debug the generation pipeline. This is a very low-cost test. Continue?')) {
+            return;
+        }
+        setIsTestingSources(true);
+        setTestFeedback('');
+        try {
+            const testFunction = httpsCallable(functions, 'testMicroSampleSources');
+            const result = await testFunction({});
+            const data = result.data as { success: boolean; message: string; reportId: string };
+            setTestFeedback(data.message || 'Micro sample test completed. Check Firestore for the report.');
+        } catch (error: any) {
+            console.error("Error testing micro sample sources:", error);
+            setTestFeedback(`Error: ${error.message || 'Failed to start micro sample source test.'}`);
+        } finally {
+            setIsTestingSources(false);
+            setTimeout(() => setTestFeedback(''), 10000);
+        }
+    };
+
     return (
         <div className="bg-brand-background min-h-screen">
             <Header />
@@ -548,7 +568,10 @@ const DashboardPage: React.FC = () => {
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-3xl font-bold text-brand-text-primary">Dashboard</h1>
                     {userData.role === 'Admin' && (
-                        <div className="flex flex-wrap gap-2">                            
+                        <div className="flex flex-wrap gap-2">
+                            <button onClick={handleMicroSampleTestSource} disabled={isTestingSources} className="bg-orange-500 text-white py-2 px-4 rounded-md hover:bg-orange-600 disabled:bg-orange-300 transition">
+                                {isTestingSources ? 'Testing...' : 'Micro Test (4 Articles)'}
+                            </button>
                             <button onClick={handleSampleTestSource} disabled={isTestingSources} className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-blue-300 transition">
                                 {isTestingSources ? 'Testing...' : 'Test Sample Sources (RSS)'}
                             </button>

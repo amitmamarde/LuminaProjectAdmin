@@ -5,7 +5,7 @@ import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import admin from "firebase-admin";
 import { getFunctions } from "firebase-admin/functions";
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenerativeAI, Type } from "@google/genai";
 import Parser from "rss-parser";
 import SOURCE_REGISTRY from "./source-registry.json" with { type: "json" };
 
@@ -105,7 +105,7 @@ const SUPPORTED_CATEGORIES = [
 async function performContentGeneration(articleId, data, geminiApiKey) {
     console.log(`[${articleId}] Starting content generation for: "${data.title}" of type "${data.articleType}"`);
 
-    const ai = new GoogleGenAI(geminiApiKey);
+    const genAI = new GoogleGenerativeAI(geminiApiKey);
     const articleRef = db.collection('articles').doc(articleId);
     let { title, categories, shortDescription, articleType, sourceUrl } = data;
 
@@ -113,7 +113,7 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
     if (articleType === 'Positive News') {
         console.log(`[${articleId}] Verifying 'Positive News' classification.`);
         try {
-            const classificationModel = ai.getGenerativeModel({ model: GEMINI_MODEL });
+            const classificationModel = genAI.getGenerativeModel({ model: GEMINI_MODEL });
             const classificationPrompt = `Based on the title and summary below, is the story primarily positive, uplifting, or about a constructive solution? Answer only with "Yes" or "No".\n\nTitle: "${title}"\nSummary: "${shortDescription}"`;
             const result = await classificationModel.generateContent(classificationPrompt);
             const answer = result.response.text().trim();
@@ -198,7 +198,7 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
       }
 
       console.log(`[${articleId}] Calling Gemini API...`);
-      const model = ai.getGenerativeModel({
+      const model = genAI.getGenerativeModel({
         model: GEMINI_MODEL,
         systemInstruction: { parts: [{ text: GLOBAL_SYSTEM_PROMPT }] },
         generationConfig: {
@@ -488,10 +488,11 @@ function getSuggestionsFromApiResponse(response, context) {
  * Processes a single RSS feed to find and create new article drafts.
  * @param {object} source The source object from the registry, including rssUrl.
  * @param {object} [options] - Optional parameters.
+ * @param {number} [options.limit=5] - The number of recent articles to process from the feed.
  * @param {string} [options.initialStatus='Draft'] - The status to set for new articles.
  */
 async function processRssFeed(source, options = {}) {
-    const { initialStatus = 'Draft' } = options;
+    const { initialStatus = 'Draft', limit = 5 } = options;
     const { rssUrl, pillar, region, domain } = source;
     console.log(`[RSS] Processing feed for ${domain} in ${region}`);
 
@@ -504,7 +505,7 @@ async function processRssFeed(source, options = {}) {
 
         let newArticleCount = 0;
         // Limit to the 5 most recent articles from the feed to avoid large writes
-        const recentItems = feed.items.slice(0, 5);
+        const recentItems = feed.items.slice(0, limit);
 
         for (const item of recentItems) {
             const sourceUrl = item.link;
@@ -625,9 +626,9 @@ export const discoverTopics = onSchedule({
  * Logs the result to a source test report in Firestore.
  * @param {object} source - The source object { domain, pillar, region }.
  * @param {admin.firestore.DocumentReference} reportRef - The reference to the main report document.
- * @param {GoogleGenAI} ai - The GoogleGenAI instance.
+ * @param {GoogleGenerativeAI} genAI - The GoogleGenerativeAI instance.
  */
-async function processSingleSourceTest(source, reportRef, ai) {
+async function processSingleSourceTest(source, reportRef, genAI) {
     const { domain, pillar, region } = source;
 
     const reportResultsRef = reportRef.collection('results');
@@ -672,7 +673,7 @@ If no article is found, call it with { "suggestions": [] }.
 
     try {
 
-        const model = ai.getGenerativeModel({
+        const model = genAI.getGenerativeModel({
             model: GEMINI_MODEL,
             systemInstruction: { parts: [{ text: GLOBAL_SYSTEM_PROMPT }] },
             tools: [saveSuggestionsTool, { googleSearch: {} }],
@@ -768,7 +769,7 @@ async function processSingleRssFeedTest(source, reportRef, options = {}) {
     const docId = domain.replace(/[^a-zA-Z0-9.-]/g, '_') + '_rss';
 
     try {
-        // Pass options to processRssFeed. This allows us to control the status for tests.
+        // Pass options to processRssFeed. This allows us to control status and item limits for tests.
         await processRssFeed(source, options);
 
         // If processRssFeed completes without throwing an error, it's a success.
@@ -815,11 +816,11 @@ export const testAllSources = onCall({
 
     console.log(`[Source Test] Starting test run, initiated by ${userDoc.data().email}.`);
     const geminiApiKey = process.env.GEMINI_API_KEY;
-    const ai = new GoogleGenAI(geminiApiKey);
+    const genAI = new GoogleGenerativeAI(geminiApiKey);
 
-    if (!ai) {
-        console.error("[Source Test] Failed to initialize GoogleGenAI. Gemini API key might be missing or invalid.");
-        throw new Error("Failed to initialize GoogleGenAI.");
+    if (!genAI) {
+        console.error("[Source Test] Failed to initialize GoogleGenerativeAI. Gemini API key might be missing or invalid.");
+        throw new Error("Failed to initialize GoogleGenerativeAI.");
     }
 
     const reportRef = db.collection('sourceTestReports').doc();
@@ -853,7 +854,7 @@ export const testAllSources = onCall({
 
     // Process each source sequentially to avoid overwhelming APIs.
     for (const source of sourcesToTest) {
-        await processSingleSourceTest(source, reportRef, ai);
+        await processSingleSourceTest(source, reportRef, genAI);
         await delay(1200); // Wait 1.2 seconds to stay safely under 60 RPM limit.
     }
 
@@ -934,6 +935,71 @@ export const testSampleSources = onCall({
     
     const summary = `Source sample test completed. Report ID: ${reportRef.id}. Success: ${finalData.successCount}, Failure: ${finalData.failureCount}`;
     console.log(`[Source Sample Test] ${summary}`);
+    return { success: true, message: summary, reportId: reportRef.id };
+});
+
+/**
+ * A callable function for admins to test a "micro" sample of sources.
+ * This is a low-cost, quick test for debugging the end-to-end generation flow.
+ */
+export const testMicroSampleSources = onCall({
+    region: "europe-west1",
+    cors: [/luminaprojectadmin\.netlify\.app$/, "http://localhost:5173"],
+    timeoutSeconds: 120,
+}, async (request) => {
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+    }
+    const userDoc = await db.collection('users').doc(request.auth.uid).get();
+    if (!userDoc.exists || userDoc.data().role !== 'Admin') {
+        throw new HttpsError('permission-denied', 'Only admins can run this source test.');
+    }
+
+    console.log(`[Micro Source Test] Starting test run, initiated by ${userDoc.data().email}.`);
+
+    const reportRef = db.collection('sourceTestReports').doc();
+    await reportRef.set({
+        status: 'Running',
+        testType: 'Micro',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        totalSources: 0,
+        successCount: 0,
+        failureCount: 0,
+        triggeredBy: userDoc.data().email,
+    });
+
+    // Hardcode a very small number of sources for a quick, low-cost test.
+    // This uses the structure from source-registry.json
+    const sourcesToTest = [
+        {
+            "domain": "apnews.com",
+            "rssUrl": "https://apnews.com/hub/ap-top-news/rss",
+            "pillar": "general_quality_news",
+            "region": "Worldwide"
+        },
+        {
+            "domain": "techcrunch.com",
+            "rssUrl": "https://techcrunch.com/feed/",
+            "pillar": "research_breakthroughs",
+            "region": "USA"
+        }
+    ];
+
+    await reportRef.update({ totalSources: sourcesToTest.length });
+
+    // Process each source sequentially.
+    for (const source of sourcesToTest) {
+        // We want 2 articles from each source.
+        await processSingleRssFeedTest(source, reportRef, { limit: 2 });
+        await delay(200); // Small delay between requests.
+    }
+
+    const finalReportSnap = await reportRef.get();
+    const finalData = finalReportSnap.data();
+    await reportRef.update({ status: 'Completed', completedAt: admin.firestore.FieldValue.serverTimestamp() });
+    
+    const summary = `Micro source test completed. Report ID: ${reportRef.id}. Success: ${finalData.successCount}, Failure: ${finalData.failureCount}`;
+    console.log(`[Micro Source Test] ${summary}`);
     return { success: true, message: summary, reportId: reportRef.id };
 });
 
