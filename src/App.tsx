@@ -550,7 +550,7 @@ const DashboardPage: React.FC = () => {
                             <button onClick={handleSampleTestSource} disabled={isTestingSources} className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-blue-300 transition">
                                 {isTestingSources ? 'Testing...' : 'Test Sample Sources (RSS)'}
                             </button>
-                            <button onClick={handleTestSource} disabled={isTestingSources || isTestingSample || isTestingRss} className="bg-teal-600 text-white py-2 px-4 rounded-md hover:bg-teal-700 disabled:bg-teal-300 transition">
+                            <button onClick={handleTestSource} disabled={isTestingSources} className="bg-teal-600 text-white py-2 px-4 rounded-md hover:bg-teal-700 disabled:bg-teal-300 transition">
                                 {isTestingSources ? 'Testing All...' : 'Test All Sources'}
                             </button>
                             <button onClick={handleRequeueAll} disabled={isRequeuing || isTestingSources} className="bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 disabled:bg-purple-300 transition">
