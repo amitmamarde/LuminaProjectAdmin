@@ -511,8 +511,11 @@ function getSuggestionsFromApiResponse(response, context) {
 /**
  * Processes a single RSS feed to find and create new article drafts.
  * @param {object} source The source object from the registry, including rssUrl.
+ * @param {object} [options] - Optional parameters.
+ * @param {string} [options.initialStatus='Draft'] - The status to set for new articles.
  */
-async function processRssFeed(source) {
+async function processRssFeed(source, options = {}) {
+    const { initialStatus = 'Draft' } = options;
     const { rssUrl, pillar, region, domain } = source;
     console.log(`[RSS] Processing feed for ${domain} in ${region}`);
 
@@ -559,15 +562,19 @@ async function processRssFeed(source) {
                 region: region,
                 // Use contentSnippet or description, fallback to empty string
                 shortDescription: item.contentSnippet || item.content || '',
-                // Set status to 'Draft'. The onDocumentCreated trigger
-                // will automatically queue it for generation.
-                status: 'Draft',
+                status: initialStatus,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 discoveredAt: item.isoDate ? new Date(item.isoDate) : admin.firestore.FieldValue.serverTimestamp(),
                 sourceUrl: sourceUrl,
                 sourceTitle: feed.title || domain,
                 discoveryMethod: 'RSS',
             };
+
+            // If publishing directly, set publishedAt and a basic flashContent from the RSS snippet.
+            if (initialStatus === 'Published') {
+                articleData.publishedAt = admin.firestore.FieldValue.serverTimestamp();
+                articleData.flashContent = `<p>${item.contentSnippet || item.content || 'Summary not available.'}</p>`;
+            }
 
             await newArticleRef.set(articleData);
             console.log(`[${newArticleRef.id}] Created new draft from RSS feed for "${item.title}"`);
@@ -591,7 +598,6 @@ async function processRssFeed(source) {
 export const discoverTopics = onSchedule({
     schedule: "every 24 hours",
     region: "europe-west1",
-    secrets: ["GEMINI_API_KEY"],
 }, async (event) => {
     console.log("Running scheduled RSS topic discovery...");
 
@@ -695,6 +701,8 @@ If no article is found, call it with { "suggestions": [] }.
             },
         });
 
+        const result = await model.generateContent(testPrompt);
+
         const suggestionsData = getSuggestionsFromApiResponse(result.response, domain);
 
         if (!suggestionsData) {
@@ -768,17 +776,17 @@ If no article is found, call it with { "suggestions": [] }.
  * Processes a single RSS feed as a test and logs the result to a report.
  * @param {object} source - The source object { domain, rssUrl, pillar, region }.
  * @param {admin.firestore.DocumentReference} reportRef - The reference to the main report document.
+ * @param {object} [options] - Optional parameters to pass to processRssFeed.
  */
-async function processSingleRssFeedTest(source, reportRef) {
+async function processSingleRssFeedTest(source, reportRef, options = {}) {
     const { domain } = source;
     const reportResultsRef = reportRef.collection('results');
     // Sanitize domain for a valid Firestore document ID and add suffix to avoid collisions.
     const docId = domain.replace(/[^a-zA-Z0-9.-]/g, '_') + '_rss';
 
     try {
-        // processRssFeed creates articles but doesn't return a summary of what it did.
-        // We rely on its internal logging for details and just capture success/failure here.
-        await processRssFeed(source);
+        // Pass options to processRssFeed. This allows us to control the status for tests.
+        await processRssFeed(source, options);
 
         // If processRssFeed completes without throwing an error, it's a success.
         await reportResultsRef.doc(docId).set({
@@ -885,7 +893,6 @@ export const testAllSources = onCall({
  */
 export const testSampleSources = onCall({
     region: "europe-west1",
-    secrets: ["GEMINI_API_KEY"],
     cors: [/luminaprojectadmin\.netlify\.app$/, "http://localhost:5173"],
     timeoutSeconds: 180, // Shorter timeout for a smaller sample.
 }, async (request) => {
@@ -897,16 +904,7 @@ export const testSampleSources = onCall({
         throw new HttpsError('permission-denied', 'Only admins can run this source test.');
     }
 
-    console.log("[Source Sample Test] Request received:", request);
-
     console.log(`[Source Sample Test] Starting test run, initiated by ${userDoc.data().email}.`);
-    const geminiApiKey = process.env.GEMINI_API_KEY;
-    const ai = new GoogleGenAI(geminiApiKey);
-
-    if (!ai) {
-        console.error("[Source Sample Test] Failed to initialize GoogleGenAI. Gemini API key might be missing or invalid.");
-        throw new Error("Failed to initialize GoogleGenAI.");
-    }
 
     const reportRef = db.collection('sourceTestReports').doc();
     await reportRef.set({
@@ -927,79 +925,10 @@ export const testSampleSources = onCall({
         for (const region of regions) {
             if (region === 'notes') continue;
             const regionData = pillarData[region];
-            if (regionData.allowlist && Array.isArray(regionData.allowlist) && regionData.allowlist.length > 0) {
-                // Take the first source from each list as a sample.
-                const sampleSource = regionData.allowlist[0];
-                sourcesToTest.push({ domain: sampleSource.domain, pillar, region });
-            }
-        }
-    }
-
-    await reportRef.update({ totalSources: sourcesToTest.length });
-
-    // Process each source sequentially to avoid overwhelming APIs.
-    for (const source of sourcesToTest) {
-        await processSingleSourceTest(source, reportRef, ai);
-        await delay(1200); // Wait 1.2 seconds to stay safely under 60 RPM limit.
-    }
-
-    const finalReportSnap = await reportRef.get();
-    const finalData = finalReportSnap.data();
-    await reportRef.update({
-        status: 'Completed',
-        completedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    const summary = `Source sample test completed. Report ID: ${reportRef.id}. Success: ${finalData.successCount}, Failure: ${finalData.failureCount}`;
-    console.log(`[Source Sample Test] ${summary}`);
-    return { success: true, message: summary, reportId: reportRef.id };
-});
-
-/**
- * A callable function for admins to test a sample of RSS feeds from source-registry.json.
- * It selects one source with an RSS feed per pillar/region combination.
- * It generates a report in Firestore under the `sourceTestReports` collection.
- */
-export const testSampleRssFeeds = onCall({
-    region: "europe-west1",
-    cors: [/luminaprojectadmin\.netlify\.app$/, "http://localhost:5173"],
-    timeoutSeconds: 180, // Shorter timeout for a smaller sample.
-}, async (request) => {
-    if (!request.auth) {
-        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
-    }
-    const userDoc = await db.collection('users').doc(request.auth.uid).get();
-    if (!userDoc.exists || userDoc.data().role !== 'Admin') {
-        throw new HttpsError('permission-denied', 'Only admins can run this source test.');
-    }
-
-    console.log(`[RSS Sample Test] Starting test run, initiated by ${userDoc.data().email}.`);
-
-    const reportRef = db.collection('sourceTestReports').doc();
-    await reportRef.set({
-        status: 'Running',
-        testType: 'RSS Sample',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        totalSources: 0,
-        successCount: 0,
-        failureCount: 0,
-        triggeredBy: userDoc.data().email,
-    });
-
-    const sourcesToTest = [];
-    const pillars = Object.keys(SOURCE_REGISTRY.sources);
-    for (const pillar of pillars) {
-        const pillarData = SOURCE_REGISTRY.sources[pillar];
-        const regions = Object.keys(pillarData);
-        for (const region of regions) {
-            if (region === 'notes') continue;
-            const regionData = pillarData[region];
-            if (regionData.allowlist && Array.isArray(regionData.allowlist) && regionData.allowlist.length > 0) {
-                // Find the first source from each list that has an rssUrl.
-                const sampleSourceWithRss = regionData.allowlist.find(s => s.rssUrl);
-                if (sampleSourceWithRss) {
-                    sourcesToTest.push({ ...sampleSourceWithRss, pillar, region });
-                }
+            // Find the first source from each list that has an rssUrl.
+            const sampleSourceWithRss = regionData.allowlist.find(s => s.rssUrl);
+            if (sampleSourceWithRss) {
+                sourcesToTest.push({ ...sampleSourceWithRss, pillar, region });
             }
         }
     }
@@ -1008,18 +937,19 @@ export const testSampleRssFeeds = onCall({
 
     // Process each source sequentially.
     for (const source of sourcesToTest) {
-        await processSingleRssFeedTest(source, reportRef);
+        await processSingleRssFeedTest(source, reportRef, { initialStatus: 'Published' });
         await delay(200); // Small delay between requests.
     }
 
     const finalReportSnap = await reportRef.get();
     const finalData = finalReportSnap.data();
     await reportRef.update({ status: 'Completed', completedAt: admin.firestore.FieldValue.serverTimestamp() });
-
-    const summary = `RSS sample test completed. Report ID: ${reportRef.id}. Success: ${finalData.successCount}, Failure: ${finalData.failureCount}`;
-    console.log(`[RSS Sample Test] ${summary}`);
+    
+    const summary = `Source sample test completed. Report ID: ${reportRef.id}. Success: ${finalData.successCount}, Failure: ${finalData.failureCount}`;
+    console.log(`[Source Sample Test] ${summary}`);
     return { success: true, message: summary, reportId: reportRef.id };
 });
+
 /**
  * Generates an image using an external API and returns its URL.
  * This is a callable function, which handles CORS automatically for allowed origins.

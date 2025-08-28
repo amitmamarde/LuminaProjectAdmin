@@ -473,8 +473,6 @@ const LoginPage: React.FC = () => {
 const DashboardPage: React.FC = () => {
     const { userData } = useAuth();
     const [isRequeuing, setIsRequeuing] = useState(false);
-    const [isTestingSample, setIsTestingSample] = useState(false);
-    const [isTestingRss, setIsTestingRss] = useState(false);
     const [isTestingSources, setIsTestingSources] = useState(false);
     const [testFeedback, setTestFeedback] = useState('');
     const [feedback, setFeedback] = useState('');
@@ -525,7 +523,7 @@ const DashboardPage: React.FC = () => {
         if (!window.confirm('This will test one source from each category/region combination to check for major issues. This is a low-cost test. Continue?')) {
             return;
         }
-        setIsTestingSample(true);
+        setIsTestingSources(true);
         setTestFeedback('');
         try {
             const testFunction = httpsCallable(functions, 'testSampleSources');
@@ -536,27 +534,7 @@ const DashboardPage: React.FC = () => {
             console.error("Error testing sample sources:", error);
             setTestFeedback(`Error: ${error.message || 'Failed to start sample source test.'}`);
         } finally {
-            setIsTestingSample(false);
-            setTimeout(() => setTestFeedback(''), 10000);
-        }
-    };
-
-    const handleRssSampleTest = async () => {
-        if (!window.confirm('This will test a sample of RSS feeds from the registry to check if they are parsable. This is a low-cost test. Continue?')) {
-            return;
-        }
-        setIsTestingRss(true);
-        setTestFeedback('');
-        try {
-            const testFunction = httpsCallable(functions, 'testSampleRssFeeds');
-            const result = await testFunction({});
-            const data = result.data as { success: boolean; message: string; reportId: string };
-            setTestFeedback(data.message || 'RSS Sample test completed. Check Firestore for the report.');
-        } catch (error: any) {
-            console.error("Error testing RSS feeds:", error);
-            setTestFeedback(`Error: ${error.message || 'Failed to start RSS sample test.'}`);
-        } finally {
-            setIsTestingRss(false);
+            setIsTestingSources(false);
             setTimeout(() => setTestFeedback(''), 10000);
         }
     };
@@ -568,17 +546,14 @@ const DashboardPage: React.FC = () => {
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-3xl font-bold text-brand-text-primary">Dashboard</h1>
                     {userData.role === 'Admin' && (
-                        <div className="flex flex-wrap gap-2">
-                            <button onClick={handleSampleTestSource} disabled={isTestingSample || isTestingSources || isTestingRss} className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-blue-300 transition">
-                                {isTestingSample ? 'Testing Sample...' : 'Test Sample Sources'}
-                            </button>
-                            <button onClick={handleRssSampleTest} disabled={isTestingRss || isTestingSample || isTestingSources} className="bg-orange-500 text-white py-2 px-4 rounded-md hover:bg-orange-600 disabled:bg-orange-300 transition">
-                                {isTestingRss ? 'Testing RSS...' : 'Test Sample RSS Feeds'}
+                        <div className="flex flex-wrap gap-2">                            
+                            <button onClick={handleSampleTestSource} disabled={isTestingSources} className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-blue-300 transition">
+                                {isTestingSources ? 'Testing...' : 'Test Sample Sources (RSS)'}
                             </button>
                             <button onClick={handleTestSource} disabled={isTestingSources || isTestingSample || isTestingRss} className="bg-teal-600 text-white py-2 px-4 rounded-md hover:bg-teal-700 disabled:bg-teal-300 transition">
                                 {isTestingSources ? 'Testing All...' : 'Test All Sources'}
                             </button>
-                            <button onClick={handleRequeueAll} disabled={isRequeuing || isTestingSources || isTestingSample || isTestingRss} className="bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 disabled:bg-purple-300 transition">
+                            <button onClick={handleRequeueAll} disabled={isRequeuing || isTestingSources} className="bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 disabled:bg-purple-300 transition">
                                 {isRequeuing ? 'Re-queueing...' : 'Re-queue All Failed'}
                             </button>
                         </div>
