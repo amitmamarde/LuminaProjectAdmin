@@ -243,7 +243,8 @@ const ArticleFeedPage: React.FC = () => {
                     <div className="relative z-10 max-w-2xl text-center flex flex-col items-center h-full justify-center">
                         <div className="flex-grow flex flex-col items-center justify-center">
                             <h1 className="text-4xl md:text-5xl font-extrabold mb-4" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>{article.title}</h1>
-                            <p className="text-lg md:text-xl mb-8 leading-relaxed">{article.flashContent}</p>
+                            {/* Using whitespace-pre-wrap to respect newlines in plain text flashContent */}
+                            <p className="text-lg md:text-xl mb-8 leading-relaxed whitespace-pre-wrap">{article.flashContent}</p>
                             {article.articleType === 'Positive News' && article.sourceUrl && (
                                 <div className="mb-8 text-sm bg-black/30 backdrop-blur-sm p-3 rounded-lg">
                                     Source: <a href={article.sourceUrl} target="_blank" rel="noopener noreferrer" className="font-semibold underline hover:text-gray-200 transition">{article.sourceTitle || 'Read original article'}</a>
@@ -313,7 +314,8 @@ const PublicArticleView: React.FC = () => {
                     ) : (
                         <div className="mb-6 bg-gray-100 p-4 rounded-lg border border-gray-200">
                              <h2 className="text-2xl font-bold text-brand-text-primary mb-4">Lumina Flash</h2>
-                             <p className="text-lg text-brand-text-secondary mb-4">{article.flashContent}</p>
+                             {/* Using whitespace-pre-wrap to respect newlines in plain text flashContent */}
+                             <p className="text-lg text-brand-text-secondary mb-4 whitespace-pre-wrap">{article.flashContent}</p>
                              {sourceLink && (
                                 <p className="text-brand-text-secondary">
                                     This is a summary of a story from an external source.
@@ -550,9 +552,9 @@ const DashboardPage: React.FC = () => {
                             <button onClick={handleSampleTestSource} disabled={isTestingSources} className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-blue-300 transition">
                                 {isTestingSources ? 'Testing...' : 'Test Sample Sources (RSS)'}
                             </button>
-                            <button onClick={handleTestSource} disabled={isTestingSources} className="bg-teal-600 text-white py-2 px-4 rounded-md hover:bg-teal-700 disabled:bg-teal-300 transition">
+                            {/* <button onClick={handleTestSource} disabled={isTestingSources} className="bg-teal-600 text-white py-2 px-4 rounded-md hover:bg-teal-700 disabled:bg-teal-300 transition">
                                 {isTestingSources ? 'Testing All...' : 'Test All Sources'}
-                            </button>
+                            </button> */}
                             <button onClick={handleRequeueAll} disabled={isRequeuing || isTestingSources} className="bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 disabled:bg-purple-300 transition">
                                 {isRequeuing ? 'Re-queueing...' : 'Re-queue All Failed'}
                             </button>
@@ -693,9 +695,15 @@ const ArticleListPage: React.FC = () => {
     useEffect(() => {
         setLoading(true);
         const articlesRef = collection(db, 'articles');
-        let q: ReturnType<typeof query>;
+        let q: ReturnType<typeof query>; 
 
-        if (filterStatus !== 'all') {
+        // When filtering for 'Published' articles, it's better to sort by the publication date.
+        // For all other statuses (or 'all'), sorting by creation date is more appropriate.
+        if (filterStatus === ArticleStatusEnum.Published) {
+            // This query is supported by the (status, publishedAt) index.
+            q = query(articlesRef, where('status', '==', filterStatus), orderBy('publishedAt', 'desc'));
+        } else if (filterStatus !== 'all') {
+            // This query is supported by the (status, createdAt) index.
             q = query(articlesRef, where('status', '==', filterStatus), orderBy('createdAt', 'desc'));
         } else {
             q = query(articlesRef, orderBy('createdAt', 'desc'));

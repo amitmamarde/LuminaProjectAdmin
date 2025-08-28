@@ -104,9 +104,32 @@ const SUPPORTED_CATEGORIES = [
  */
 async function performContentGeneration(articleId, data, geminiApiKey) {
     console.log(`[${articleId}] Starting content generation for: "${data.title}" of type "${data.articleType}"`);
-    
+
     const ai = new GoogleGenAI(geminiApiKey);
-    const { title, categories, shortDescription, articleType, sourceUrl } = data;
+    const articleRef = db.collection('articles').doc(articleId);
+    let { title, categories, shortDescription, articleType, sourceUrl } = data;
+
+    // --- Verify 'Positive News' classification before proceeding ---
+    if (articleType === 'Positive News') {
+        console.log(`[${articleId}] Verifying 'Positive News' classification.`);
+        try {
+            const classificationModel = ai.getGenerativeModel({ model: GEMINI_MODEL });
+            const classificationPrompt = `Based on the title and summary below, is the story primarily positive, uplifting, or about a constructive solution? Answer only with "Yes" or "No".\n\nTitle: "${title}"\nSummary: "${shortDescription}"`;
+            const result = await classificationModel.generateContent(classificationPrompt);
+            const answer = result.response.text().trim();
+
+            if (answer.toLowerCase().includes('no')) {
+                console.log(`[${articleId}] AI classified this as NOT positive news. Changing type to 'Trending Topic'.`);
+                articleType = 'Trending Topic'; // Update local variable for this run
+                // Update the document in the background. No need to await.
+                articleRef.update({ articleType: 'Trending Topic' });
+            } else {
+                console.log(`[${articleId}] AI confirmed this is positive news.`);
+            }
+        } catch (e) {
+            console.warn(`[${articleId}] Failed to verify article type, proceeding with original type. Error: ${e.message}`);
+        }
+    }
 
     try {
       const categoriesText = categories.join(', ');
@@ -127,12 +150,8 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
         The user has provided this context: "${shortDescription}".
 
         Based on the article content (which you should access if possible) and the provided context, produce a crisp, neutral summary.
-
         Please provide your response in a single, minified JSON object with two specific keys:
-          1. "flashContent": This should contain three parts, formatted for HTML display:
-             - A "Why it matters" sentence (e.g., <p><strong>Why it matters:</strong> This discovery could lead to new treatments...</p>).
-             - A concise summary of 70-110 words (e.g., <p>Researchers have announced...</p>).
-             - 3 bullet points highlighting key takeaways (e.g., <ul><li>Impact...</li><li>Who/Where...</li><li>What's next...</li></ul>).
+          1. "flashContent": A professional, engaging summary of approximately 60 words. It should be a single paragraph of plain text. Start with a "Why it matters" concept, followed by the core summary, and incorporate key takeaways. Do NOT use any HTML tags (like <p>, <ul>, <li>) or markdown.
           2. "imagePrompt": A vivid, descriptive text prompt for an AI image generator to create a symbolic, non-controversial image representing the topic.
         Do not include any other text or explanations outside of the single JSON object.`;
 
@@ -155,7 +174,7 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
         Your goal is to write a balanced, fully sourced explainer that assesses the claim.
 
         Please provide your response in a single, minified JSON object with three specific keys:
-          1. "flashContent": A concise, factual summary of 60-100 words that quickly states the verdict and the main reason. This is the "Lumina Flash".
+          1. "flashContent": A concise, factual summary of approximately 60 words that quickly states the verdict and the main reason. This is the "Lumina Flash". It should be plain text without HTML.
           2. "deepDiveContent": A detailed, neutral explanation formatted with clean HTML. It MUST include the following sections:
              - A verdict (e.g., <h2>Verdict: Mostly False</h2>).
              - A "What Was Claimed" section (e.g., <h3>What Was Claimed</h3><p>...</p>).
@@ -192,8 +211,6 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
       const jsonString = result.response.text().trim();
       const generatedText = JSON.parse(jsonString);
       console.log(`[${articleId}] Successfully generated content from API.`);
- 
-      const articleRef = db.collection('articles').doc(articleId);
       
       // --- New Status Logic ---
       // Trending/Positive News are auto-published. Misinformation goes to expert review.
@@ -416,47 +433,6 @@ export const requeueAllFailedArticles = onCall(
         }
     }
 );
-/**
- * A callable function that allows an Admin to manually trigger content regeneration
- * for an article , typically one that previously failed. This is synchronous and bypasses the queue.
- */
-export const regenerateArticleContent = onCall({
-  region: "europe-west1",
-  secrets: ["GEMINI_API_KEY"],
-  cors: [/luminaprojectadmin\.netlify\.app$/, "http://localhost:5173"],
-}, async (request) => {
-    // 1. Check authentication and authorization
-    if (!request.auth) {
-        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
-    }
-    const userDoc = await db.collection('users').doc(request.auth.uid).get();
-    if (!userDoc.exists || userDoc.data().role !== 'Admin') {
-        throw new HttpsError('permission-denied', 'Only admins can regenerate article content.');
-    }
-
-    // 2. Validate input
-    const { articleId } = request.data;
-    if (!articleId || typeof articleId !== 'string') {
-        throw new HttpsError('invalid-argument', 'The function must be called with an "articleId" argument.');
-    }
-
-    // 3. Fetch article data
-    const articleRef = db.collection('articles').doc(articleId);
-    const articleDoc = await articleRef.get();
-    if (!articleDoc.exists) {
-        throw new HttpsError('not-found', `Article with ID ${articleId} not found.`);
-    }
-
-    // 4. Call the core generation logic
-    const geminiApiKey = process.env.GEMINI_API_KEY;
-    try {
-        await performContentGeneration(articleId, articleDoc.data(), geminiApiKey);
-        return { success: true, message: `Successfully regenerated content for ${articleId}.` };
-    } catch (error) {
-        // The helper function handles updating the doc, so we just throw the appropriate HttpsError.
-        throw new HttpsError('internal', `Content generation failed for ${articleId}. See article for details.`, { originalError: error.message });
-    }
-});
 
 /**
  * Extracts suggestion data from a Gemini API response, handling both
@@ -546,6 +522,13 @@ async function processRssFeed(source, options = {}) {
                 continue;
             }
 
+            // --- Category processing logic ---
+            const sourceCategories = item.categories || [];
+            const validCategories = sourceCategories
+                .map(cat => typeof cat === 'string' ? cat.trim() : (cat.name || '')) // Handle different category formats from rss-parser
+                .filter(cat => cat && SUPPORTED_CATEGORIES.includes(cat));
+            const finalCategories = validCategories.slice(0, 3);
+
             // Map pillar to ArticleType
             let articleType;
             if (pillar === 'positive_news') articleType = 'Positive News';
@@ -558,7 +541,7 @@ async function processRssFeed(source, options = {}) {
             const articleData = {
                 title: item.title || 'Untitled',
                 articleType: articleType,
-                categories: item.categories || [],
+                categories: finalCategories, // Use the cleaned and limited categories
                 region: region,
                 // Use contentSnippet or description, fallback to empty string
                 shortDescription: item.contentSnippet || item.content || '',
@@ -937,7 +920,11 @@ export const testSampleSources = onCall({
 
     // Process each source sequentially.
     for (const source of sourcesToTest) {
-        await processSingleRssFeedTest(source, reportRef, { initialStatus: 'Published' });
+        // By calling processSingleRssFeedTest without an options object, it will default
+        // to using processRssFeed with an initialStatus of 'Draft'. This correctly
+        // simulates the behavior of the main `discoverTopics` function, creating drafts
+        // that will be automatically queued for content generation.
+        await processSingleRssFeedTest(source, reportRef);
         await delay(200); // Small delay between requests.
     }
 
