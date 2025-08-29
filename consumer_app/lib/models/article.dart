@@ -25,16 +25,10 @@ class Article {
     this.publishedAt,
   });
 
-  factory Article.fromFirestore(
-    DocumentSnapshot<Map<String, dynamic>> snapshot,
-  ) {
-    final data = snapshot.data();
-    if (data == null) {
-      throw StateError('Missing data for articleId: ${snapshot.id}');
-    }
-
+  factory Article.fromFirestore(DocumentSnapshot doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     return Article(
-      id: snapshot.id,
+      id: doc.id,
       title: data['title'] ?? '',
       articleType: data['articleType'] ?? 'Trending Topic',
       categories: List<String>.from(data['categories'] ?? []),
@@ -43,7 +37,7 @@ class Article {
       imageUrl: data['imageUrl'],
       sourceUrl: data['sourceUrl'],
       sourceTitle: data['sourceTitle'],
-      publishedAt: data['publishedAt'] as Timestamp?,
+      publishedAt: data['publishedAt'],
     );
   }
 }

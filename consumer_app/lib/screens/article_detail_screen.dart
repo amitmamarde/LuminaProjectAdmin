@@ -20,108 +20,112 @@ class ArticleDetailScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Layer 1: Background Image (takes up top ~60% of screen)
-          if (article.imageUrl != null && article.imageUrl!.isNotEmpty)
-            Positioned.fill(
-              child: CachedNetworkImage(
-                imageUrl: article.imageUrl!,
-                fit: BoxFit.cover,
-                placeholder: (context, url) => Container(color: Colors.grey[800]),
-                errorWidget: (context, url, error) => Container(
-                  color: Colors.grey[800],
-                  child: const Icon(Icons.broken_image, color: Colors.grey, size: 50),
-                ),
-              ),
-            ),
-          // Layer 2: Gradient overlay for text readability
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.4),
-                    Colors.black.withOpacity(0.9),
-                    Colors.black,
-                  ],
-                  stops: const [0.0, 0.4, 0.6, 1.0],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-            ),
+          // 1. Image placeholder (40% of screen height)
+          SizedBox(
+            height: MediaQuery.of(context).size.height * 0.4,
+            child: (article.imageUrl != null && article.imageUrl!.isNotEmpty)
+                ? CachedNetworkImage(
+                    imageUrl: article.imageUrl!,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) =>
+                        Container(color: Colors.grey[900]),
+                    errorWidget: (context, url, error) => Container(
+                      color: Colors.grey[900],
+                      child: const Icon(Icons.image_not_supported,
+                          color: Colors.grey, size: 50),
+                    ),
+                  )
+                : Container(
+                    color: Colors.grey[900],
+                    child: const Icon(Icons.image, color: Colors.grey, size: 50),
+                  ),
           ),
-          // Layer 3: Content and Actions
-          Positioned.fill(
+          // 2. Content area (remaining 60%)
+          Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     article.title,
                     style: GoogleFonts.lato(
-                      fontSize: 26,
+                      fontSize: 24,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
-                      shadows: [const Shadow(blurRadius: 4, color: Colors.black54)],
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    article.flashContent ?? 'Summary not available.',
-                    style: GoogleFonts.lato(
-                      fontSize: 16,
-                      color: Colors.grey[300],
-                      height: 1.5,
-                    ),
-                    maxLines: 5,
+                    maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const Spacer(), // Pushes content to the bottom
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      // Left: Source
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Source', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
-                            Text(
-                              article.sourceTitle ?? 'N/A',
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Text(
+                        article.flashContent ?? 'Summary not available.',
+                        style: GoogleFonts.lato(
+                          fontSize: 16,
+                          color: Colors.grey[400],
+                          height: 1.5,
                         ),
                       ),
-                      // Middle: Read Button
-                      ElevatedButton(
-                        onPressed: () => _launchAction(context),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.black,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                        ),
-                        child: Text(readButtonText, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                      // Right: Share Button
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: IconButton(
-                            icon: const Icon(Icons.share, color: Colors.white),
-                            onPressed: () => _shareArticle(context),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // The bottom action row
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 20.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Left: Source
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Source',
+                                  style: TextStyle(
+                                      color: Colors.grey[500], fontSize: 12)),
+                              Text(
+                                article.sourceTitle ?? 'N/A',
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                    ],
+                        // Middle: Read Button
+                        ElevatedButton(
+                          onPressed: () => _launchAction(context),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(30)),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 24, vertical: 12),
+                          ),
+                          child: Text(readButtonText,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                        // Right: Share Button
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: IconButton(
+                              icon: const Icon(Icons.share, color: Colors.white),
+                              onPressed: () => _shareArticle(context),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),

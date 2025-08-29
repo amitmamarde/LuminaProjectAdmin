@@ -43,8 +43,45 @@ const CATEGORIES = [
   'Digital & Media Literacy', 'Business & Finance', 'Environment & Sustainability',
   'Education & Learning', 'Arts, Media & Creativity'
 ];
-const ARTICLE_TYPES: ArticleType[] = ['Trending Topic', 'Positive News', 'Misinformation'];
+const ARTICLE_TYPES: ArticleType[] = ['Trending Topic', 'Positive News', 'Misinformation', 'Research Breakthroughs'];
 const REGIONS = ['Worldwide', 'USA', 'India', 'Europe'];
+
+const ARTICLE_TYPE_THEMES: Record<ArticleType, {
+  base: string;
+  accent: string;
+  text: string;
+  textSecondary: string;
+  prose: string;
+}> = {
+  'Positive News': {
+    base: 'bg-positive-base',
+    accent: 'text-positive-accent',
+    text: 'text-positive-text',
+    textSecondary: 'text-positive-text/80',
+    prose: 'prose-green-lumina',
+  },
+  'Research Breakthroughs': {
+    base: 'bg-research-base',
+    accent: 'text-research-accent',
+    text: 'text-research-text',
+    textSecondary: 'text-research-text/80',
+    prose: 'prose-blue-lumina',
+  },
+  'Misinformation': {
+    base: 'bg-misinformation-base',
+    accent: 'text-misinformation-accent',
+    text: 'text-misinformation-text',
+    textSecondary: 'text-misinformation-text/80',
+    prose: 'prose-orange-lumina',
+  },
+  'Trending Topic': {
+    base: 'bg-trending-base',
+    accent: 'text-trending-accent',
+    text: 'text-trending-text',
+    textSecondary: 'text-trending-text/80',
+    prose: 'prose-gray-lumina',
+  },
+};
 
 // --- Authentication Context ---
 interface AuthContextType {
@@ -191,20 +228,21 @@ const HomePage: React.FC = () => {
                     <h2 className="text-3xl font-bold text-center text-brand-text-primary mb-10">Latest from Lumina</h2>
                     {contentLoading ? <Spinner /> : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                            {latestArticles.map(article => (
-                                <a href={(article.articleType === 'Misinformation' && article.deepDiveContent) ? `#/view/${article.id}` : (article.sourceUrl || `#/view/${article.id}`)}
+                            {latestArticles.map(article => {
+                                const theme = ARTICLE_TYPE_THEMES[article.articleType] || ARTICLE_TYPE_THEMES['Trending Topic'];
+                                return (<a href={(article.articleType === 'Misinformation' && article.deepDiveContent) ? `#/view/${article.id}` : (article.sourceUrl || `#/view/${article.id}`)}
                                    target={(article.articleType === 'Misinformation' && article.deepDiveContent) ? '_self' : (article.sourceUrl ? '_blank' : '_self')}
                                    rel="noopener noreferrer"
                                    key={article.id}
-                                   className="block bg-brand-surface rounded-lg shadow-md hover:shadow-2xl transition-shadow duration-300 overflow-hidden group">
+                                   className={`block ${theme.base} rounded-lg shadow-md hover:shadow-2xl transition-shadow duration-300 overflow-hidden group`}>
                                     {article.imageUrl && <img src={article.imageUrl} alt={article.title} className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"/>}
                                     <div className="p-6">
-                                        <p className="text-sm text-brand-primary font-semibold mb-2">{article.categories.join(', ')}</p>
-                                        <h3 className="text-xl font-bold text-brand-text-primary mb-3">{article.title}</h3>
-                                        <p className="text-brand-text-secondary text-sm">{article.flashContent?.substring(0, 100)}...</p>
+                                        <p className={`text-sm ${theme.accent} font-semibold mb-2`}>{article.categories.join(', ')}</p>
+                                        <h3 className={`text-xl font-bold ${theme.text} mb-3`}>{article.title}</h3>
+                                        <p className={`${theme.textSecondary} text-sm`}>{article.flashContent?.substring(0, 100)}...</p>
                                     </div>
                                 </a>
-                            ))}
+                            );})}
                         </div>
                     )}
                 </section>
@@ -340,34 +378,35 @@ const PublicArticleView: React.FC = () => {
     // This view primarily serves to display the full content of "Misinformation" articles.
     // For other types, we show the summary and a clear link to the source.
     const hasDeepDive = article.articleType === 'Misinformation' && article.deepDiveContent;
+    const theme = ARTICLE_TYPE_THEMES[article.articleType] || ARTICLE_TYPE_THEMES['Trending Topic'];
     const sourceLinkText = article.sourceTitle || 'Read original article';
-    const sourceLink = article.sourceUrl ? <a href={article.sourceUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-primary hover:underline">{sourceLinkText}</a> : null;
+    const sourceLink = article.sourceUrl ? <a href={article.sourceUrl} target="_blank" rel="noopener noreferrer" className={`font-semibold ${theme.accent} hover:underline`}>{sourceLinkText}</a> : null;
 
     return (
         <div className="bg-brand-background min-h-screen">
              <PublicHeader />
              <article className="max-w-4xl mx-auto py-12 px-6">
                 {article.imageUrl && <img src={article.imageUrl} alt={article.title} className="w-full h-auto max-h-96 object-cover rounded-xl mb-8 shadow-lg" />}
-                <div className="bg-brand-surface p-8 sm:p-12 rounded-lg shadow-lg">
-                    <p className="text-brand-primary font-bold mb-2">{article.categories?.join(', ')}</p>
-                    <h1 className="text-4xl md:text-5xl font-extrabold text-brand-text-primary mb-4">{article.title}</h1>
-                    <div className="text-brand-text-secondary border-b pb-4 mb-6 text-sm">
+                <div className={`${theme.base} p-8 sm:p-12 rounded-lg shadow-lg`}>
+                    <p className={`${theme.accent} font-bold mb-2`}>{article.categories?.join(', ')}</p>
+                    <h1 className={`text-4xl md:text-5xl font-extrabold ${theme.text} mb-4`}>{article.title}</h1>
+                    <div className={`${theme.textSecondary} border-b pb-4 mb-6 text-sm`}>
                         Published on {article.publishedAt?.toDate().toLocaleDateString()}
                         {article.expertShowNameToPublic && article.expertDisplayName && ` • Verified by ${article.expertDisplayName}`}
                     </div>
 
                     {hasDeepDive ? (
                         <div
-                            className="prose prose-lg max-w-none prose-h2:text-brand-text-primary prose-h2:border-b prose-h2:pb-2 prose-strong:text-brand-text-primary"
+                            className={`prose prose-lg max-w-none ${theme.prose} prose-headings:border-b prose-headings:pb-2`}
                             dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(article.deepDiveContent || '') }}
                         />
                     ) : (
-                        <div className="mb-6 bg-gray-100 p-4 rounded-lg border border-gray-200">
-                             <h2 className="text-2xl font-bold text-brand-text-primary mb-4">Lumina Flash</h2>
+                        <div>
+                             <h2 className={`text-2xl font-bold ${theme.text} mb-4`}>Lumina Flash</h2>
                              {/* Using whitespace-pre-wrap to respect newlines in plain text flashContent */}
-                             <p className="text-lg text-brand-text-secondary mb-4 whitespace-pre-wrap">{article.flashContent}</p>
+                             <p className={`text-lg ${theme.textSecondary} mb-4 whitespace-pre-wrap`}>{article.flashContent}</p>
                              {sourceLink && (
-                                <p className="text-brand-text-secondary">
+                                <p className={theme.textSecondary}>
                                     This is a summary of a story from an external source.
                                     <br />
                                     <strong>Source:</strong> {sourceLink}

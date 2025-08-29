@@ -533,7 +533,8 @@ async function processRssFeed(source, options = {}) {
             // Map pillar to ArticleType
             let articleType;
             if (pillar === 'positive_news') articleType = 'Positive News';
-            else if (pillar === 'general_quality_news' || pillar === 'research_breakthroughs') articleType = 'Trending Topic';
+            else if (pillar === 'research_breakthroughs') articleType = 'Research Breakthroughs';
+            else if (pillar === 'general_quality_news') articleType = 'Trending Topic';
             else if (pillar === 'misinformation_watch') articleType = 'Misinformation';
             else continue; // Skip unknown pillars
 
