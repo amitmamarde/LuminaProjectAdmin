@@ -1,14 +1,17 @@
 {
-  "version": "2025-08-22",
+  "version": "2025-08-29",
   "sources": {
     "positive_news": {
       "global": {
         "allowlist": [
-          { "domain": "goodnewsnetwork.org", "rssUrl": "https://www.goodnewsnetwork.org/feed/" },
           { "domain": "positive.news", "rssUrl": "https://www.positive.news/feed/" },
-          { "domain": "reasonstobecheerful.world", "rssUrl": "https://reasonstobecheerful.world/feed/" },
-          { "domain": "goodgoodgood.co", "rssUrl": "https://www.goodgoodgood.co/rss" },
+          { "domain": "goodnewsnetwork.org", "rssUrl": "https://www.goodnewsnetwork.org/feed/" },
           { "domain": "optimistdaily.com", "rssUrl": "https://www.optimistdaily.com/feed/" },
+          { "domain": "goodgoodgood.co", "rssUrl": "https://www.goodgoodgood.co/rss" },
+          { "domain": "reasonstobecheerful.world", "rssUrl": "https://reasonstobecheerful.world/feed/" },
+          { "domain": "yesmagazine.org", "rssUrl": "https://www.yesmagazine.org/feed/" },
+          { "domain": "goodblacknews.org", "rssUrl": "https://goodblacknews.org/feed/" },
+          { "domain": "inspiremore.com", "rssUrl": "https://www.inspiremore.com/feed/" },
           { "domain": "huffpost.com", "rssUrl": "https://www.huffpost.com/section/good-news/feed" }
         ]
       },
@@ -21,16 +24,16 @@
       },
       "europe": {
         "allowlist": [
-          { "domain": "bbc.com", "rssUrl": "http://feeds.bbci.co.uk/news/rss.xml" },
+          { "domain": "positive.news" },
           { "domain": "euronews.com", "rssUrl": "https://www.euronews.com/rss?format=mrss&level=vertical&name=next" },
           { "domain": "theguardian.com", "rssUrl": "https://www.theguardian.com/world/series/the-upside/rss" }
         ]
       },
       "usa": {
         "allowlist": [
-            { "domain": "sunnyskyz.com", "rssUrl": "https://www.sunnyskyz.com/rss" },
-            { "domain": "today.com", "rssUrl": "https://www.today.com/news/good-news/rss" },
-            { "domain": "usatoday.com", "rssUrl": "http://rssfeeds.usatoday.com/usatoday-newstopstories" }
+          { "domain": "sunnyskyz.com", "rssUrl": "https://feeds.feedburner.com/SunnySkyz" },
+          { "domain": "today.com", "rssUrl": "https://www.today.com/news/good-news/rss" },
+          { "domain": "usatoday.com", "rssUrl": "http://rssfeeds.usatoday.com/usatoday-newstopstories" }
         ]
       }
     },
@@ -40,19 +43,17 @@
           { "domain": "futurity.org", "rssUrl": "https://www.futurity.org/feed/" },
           { "domain": "theconversation.com", "rssUrl": "https://theconversation.com/us/articles.atom" },
           { "domain": "sciencedaily.com", "rssUrl": "https://www.sciencedaily.com/rss/all.xml" },
-          { "domain": "eurekalert.org", "rssUrl": "https://www.eurekalert.org/rss/breakingnews.xml" },
-          { "domain": "who.int", "rssUrl": "https://www.who.int/rss-feeds/news-english.xml" },
-          { "domain": "un.org", "rssUrl": "https://news.un.org/feed/subscribe/en/news/all/rss.xml" },
-          { "domain": "nasa.gov", "rssUrl": "https://www.nasa.gov/news/releases/feed/" },
-          { "domain": "esa.int", "rssUrl": "https://www.esa.int/rssfeed/ESA_in_English" },
-          { "domain": "nih.gov", "rssUrl": "https://www.nih.gov/news-events/news-releases/feed.xml" },
+          { "domain": "space.com", "rssUrl": "https://www.space.com/feeds/all" },
+          { "domain": "sciencex.com", "rssUrl": "https://phys.org/rss-feed/" },
+          { "domain": "nasa.gov", "rssUrl": "https://www.nasa.gov/rss/dyn/breaking_news.rss" },
+          { "domain": "esa.int", "rssUrl": "https://www.esa.int/feeds/esa_top_news.rss" },
           { "domain": "nature.com", "rssUrl": "https://www.nature.com/nature.rss" },
           { "domain": "sciencemag.org", "rssUrl": "https://www.sciencemag.org/rss/news_current.xml" },
           { "domain": "arxiv.org" },
           { "domain": "medrxiv.org" },
           { "domain": "biorxiv.org" }
         ],
-        "notes": "For preprints (arXiv/medRxiv/bioRxiv), add disclaimers; prefer peer-reviewed follow-ups where available."
+        "notes": "Includes official feeds (NASA, ESA, etc.) and top science news sites (ScienceDaily, Space.com, etc.). Preprint servers (arXiv, medRxiv, bioRxiv) are included with disclaimers; preference given to peer-reviewed follow-ups."
       },
       "india": {
         "allowlist": [
@@ -72,7 +73,6 @@
           { "domain": "ec.europa.eu" },
           { "domain": "erc.europa.eu" },
           { "domain": "ukri.org" },
-          { "domain": "maxplanck.org", "rssUrl": "https://www.mpg.de/rss/news" },
           { "domain": "cnrs.fr" },
           { "domain": "helmholtz.de" },
           { "domain": "ox.ac.uk" },
@@ -83,64 +83,60 @@
       },
       "usa": {
         "allowlist": [
-            { "domain": "news.mit.edu", "rssUrl": "https://news.mit.edu/rss/feed" },
-            { "domain": "stanford.edu", "rssUrl": "https://news.stanford.edu/feed/" },
-            { "domain": "news.harvard.edu", "rssUrl": "https://news.harvard.edu/gazette/feed/" },
-            { "domain": "caltech.edu", "rssUrl": "https://www.caltech.edu/about/news/rss" }
+          { "domain": "news.mit.edu", "rssUrl": "https://news.mit.edu/rss/feed" },
+          { "domain": "news.stanford.edu", "rssUrl": "https://news.stanford.edu/feed/" },
+          { "domain": "news.harvard.edu", "rssUrl": "https://news.harvard.edu/gazette/feed/" },
+          { "domain": "caltech.edu", "rssUrl": "https://www.caltech.edu/about/news/rss" }
         ]
       }
     },
     "general_quality_news": {
       "global": {
         "allowlist": [
-          { "domain": "reuters.com", "rssUrl": "https://www.reuters.com/pf/api/v3/content/fetch/articles-by-section-alias-or-id-v1?query=%7B%22section_id%22%3A%22%2F%22%2C%22offset%22%3A0%2C%22size%22%3A20%2C%22website%22%3A%22reuters%22%7D&d=149&_website=reuters" },
-          { "domain": "apnews.com", "rssUrl": "https://apnews.com/hub/ap-top-news/rss" },
+          { "domain": "reuters.com", "rssUrl": "https://www.reutersagency.com/feed/?best-topics=top-news" },
+          { "domain": "apnews.com", "rssUrl": "https://apnews.com/apf-topnews?format=xml" },
           { "domain": "bbc.com", "rssUrl": "http://feeds.bbci.co.uk/news/world/rss.xml" },
           { "domain": "npr.org", "rssUrl": "https://feeds.npr.org/1001/rss.xml" },
           { "domain": "aljazeera.com", "rssUrl": "https://www.aljazeera.com/xml/rss/all.xml" }
         ],
-        "notes": "Use only when story is demonstrably positive/solutions-oriented or globally relevant."
+        "notes": "Use these globally only for stories with clear positive/solutions focus. Otherwise rely on dedicated positive feeds."
       },
       "india": {
         "allowlist": [
-            { "domain": "thehindu.com", "rssUrl": "https://www.thehindu.com/feeder/default.rss" },
-            { "domain": "indianexpress.com", "rssUrl": "https://indianexpress.com/feed/" },
-            { "domain": "timesofindia.indiatimes.com", "rssUrl": "https://timesofindia.indiatimes.com/rssfeedstopstories.cms" }
+          { "domain": "thehindu.com", "rssUrl": "https://www.thehindu.com/feeder/default.rss" },
+          { "domain": "indianexpress.com", "rssUrl": "https://indianexpress.com/feed/" },
+          { "domain": "timesofindia.indiatimes.com", "rssUrl": "https://timesofindia.indiatimes.com/rssfeedstopstories.cms" }
         ]
       },
       "europe": {
         "allowlist": [
-            { "domain": "theguardian.com", "rssUrl": "https://www.theguardian.com/world/rss" },
-            { "domain": "dw.com", "rssUrl": "https://rss.dw.com/rdf/rss-en-all" },
-            { "domain": "france24.com", "rssUrl": "https://www.france24.com/en/rss" }
+          { "domain": "theguardian.com", "rssUrl": "https://www.theguardian.com/world/rss" },
+          { "domain": "dw.com", "rssUrl": "https://rss.dw.com/rdf/rss-en-all" },
+          { "domain": "france24.com", "rssUrl": "https://www.france24.com/en/rss" }
         ]
       },
       "usa": {
         "allowlist": [
-            { "domain": "nytimes.com", "rssUrl": "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml" },
-            { "domain": "wsj.com", "rssUrl": "https://feeds.a.dj.com/rss/RSSWorldNews.xml" },
-            { "domain": "washingtonpost.com", "rssUrl": "http://feeds.washingtonpost.com/rss/world" }
+          { "domain": "nytimes.com", "rssUrl": "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml" },
+          { "domain": "wsj.com", "rssUrl": "https://feeds.a.dj.com/rss/RSSWorldNews.xml" },
+          { "domain": "washingtonpost.com", "rssUrl": "https://feeds.washingtonpost.com/rss/world" }
         ]
       }
     },
     "misinformation_watch": {
       "global": {
         "allowlist": [
-          { "domain": "ifcncodeofprinciples.poynter.org" },
           { "domain": "factcheck.org", "rssUrl": "https://www.factcheck.org/feed/" },
-          { "domain": "apnews.com", "rssUrl": "https://apnews.com/hub/fact-checking/rss" },
-          { "domain": "reuters.com", "rssUrl": "https://www.reuters.com/pf/api/v3/content/fetch/articles-by-section-alias-or-id-v1?query=%7B%22section_id%22%3A%22%2Ffact-check%22%2C%22offset%22%3A0%2C%22size%22%3A20%2C%22website%22%3A%22reuters%22%7D" },
+          { "domain": "reuters.com", "rssUrl": "https://www.reuters.com/pf/api/v3/content/fetch/articles-by-section-alias-or-id-v1?query=%7B%22section_id%22%3A%22%2Ffact-check%22%7D&d=101&_website=reuters" },
           { "domain": "snopes.com", "rssUrl": "https://www.snopes.com/feed/" },
           { "domain": "fullfact.org", "rssUrl": "https://fullfact.org/feed/" },
           { "domain": "politifact.com", "rssUrl": "https://www.politifact.com/rss/" },
-          { "domain": "afp.com" },
           { "domain": "euvsdisinfo.eu", "rssUrl": "https://euvsdisinfo.eu/feed/" }
         ]
       },
       "india": {
         "allowlist": [
           { "domain": "altnews.in", "rssUrl": "https://www.altnews.in/feed/" },
-          { "domain": "boomlive.in", "rssUrl": "https://www.boomlive.in/feeds/posts/default" },
           { "domain": "factly.in", "rssUrl": "https://factly.in/feed/" },
           { "domain": "indiatoday.in" },
           { "domain": "thequint.com" }
@@ -157,10 +153,10 @@
       },
       "usa": {
         "allowlist": [
-            { "domain": "factcheck.org", "rssUrl": "https://www.factcheck.org/feed/" },
-            { "domain": "politifact.com", "rssUrl": "https://www.politifact.com/rss/" },
-            { "domain": "snopes.com", "rssUrl": "https://www.snopes.com/feed/" },
-            { "domain": "washingtonpost.com" }
+          { "domain": "factcheck.org", "rssUrl": "https://www.factcheck.org/feed/" },
+          { "domain": "politifact.com", "rssUrl": "https://www.politifact.com/rss/" },
+          { "domain": "snopes.com", "rssUrl": "https://www.snopes.com/feed/" },
+          { "domain": "washingtonpost.com" }
         ]
       }
     }

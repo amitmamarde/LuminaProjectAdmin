@@ -192,7 +192,11 @@ const HomePage: React.FC = () => {
                     {contentLoading ? <Spinner /> : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                             {latestArticles.map(article => (
-                                <a href={article.articleType === 'Misinformation' ? `#/view/${article.id}` : article.sourceUrl} target={article.articleType === 'Misinformation' ? '_self' : '_blank'} rel="noopener noreferrer" key={article.id} className="block bg-brand-surface rounded-lg shadow-md hover:shadow-2xl transition-shadow duration-300 overflow-hidden group">
+                                <a href={(article.articleType === 'Misinformation' && article.deepDiveContent) ? `#/view/${article.id}` : (article.sourceUrl || `#/view/${article.id}`)}
+                                   target={(article.articleType === 'Misinformation' && article.deepDiveContent) ? '_self' : (article.sourceUrl ? '_blank' : '_self')}
+                                   rel="noopener noreferrer"
+                                   key={article.id}
+                                   className="block bg-brand-surface rounded-lg shadow-md hover:shadow-2xl transition-shadow duration-300 overflow-hidden group">
                                     {article.imageUrl && <img src={article.imageUrl} alt={article.title} className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"/>}
                                     <div className="p-6">
                                         <p className="text-sm text-brand-primary font-semibold mb-2">{article.categories.join(', ')}</p>
@@ -245,15 +249,28 @@ const ArticleFeedPage: React.FC = () => {
                             <h1 className="text-4xl md:text-5xl font-extrabold mb-4" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>{article.title}</h1>
                             {/* Using whitespace-pre-wrap to respect newlines in plain text flashContent */}
                             <p className="text-lg md:text-xl mb-8 leading-relaxed whitespace-pre-wrap">{article.flashContent}</p>
-                            {article.articleType === 'Positive News' && article.sourceUrl && (
+                            {article.sourceTitle && (
                                 <div className="mb-8 text-sm bg-black/30 backdrop-blur-sm p-3 rounded-lg">
-                                    Source: <a href={article.sourceUrl} target="_blank" rel="noopener noreferrer" className="font-semibold underline hover:text-gray-200 transition">{article.sourceTitle || 'Read original article'}</a>
+                                    Source: {article.sourceUrl ? (
+                                        <a href={article.sourceUrl} target="_blank" rel="noopener noreferrer" className="font-semibold underline hover:text-gray-200 transition">
+                                            {article.sourceTitle}
+                                        </a>
+                                    ) : <span className="font-semibold">{article.sourceTitle}</span>}
                                 </div>
                             )}
                         </div>
-                        <a href={article.articleType === 'Misinformation' ? `#/view/${article.id}` : article.sourceUrl} target={article.articleType === 'Misinformation' ? '_self' : '_blank'} rel="noopener noreferrer" className="mt-auto bg-white text-brand-text-primary font-bold py-3 px-8 rounded-full hover:bg-gray-200 transition-transform transform hover:scale-105">
-                            {article.articleType === 'Misinformation' ? 'Read Full Story' : 'Read at Source'}
-                        </a>
+                        {((article.articleType === 'Misinformation' && article.deepDiveContent) || article.sourceUrl) && (
+                            <a
+                                href={(article.articleType === 'Misinformation' && article.deepDiveContent) ? `#/view/${article.id}` : article.sourceUrl!}
+                                target={(article.articleType === 'Misinformation' && article.deepDiveContent) ? '_self' : '_blank'}
+                                rel="noopener noreferrer"
+                                className="mt-auto bg-white text-brand-text-primary font-bold py-3 px-8 rounded-full hover:bg-gray-200 transition-transform transform hover:scale-105"
+                            >
+                                {(article.articleType === 'Misinformation' && article.deepDiveContent)
+                                    ? 'Read Full Story'
+                                    : `Read at ${article.sourceTitle || 'Source'}`}
+                            </a>
+                        )}
                     </div>
                 </section>
             ))}
