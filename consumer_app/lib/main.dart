@@ -1,7 +1,9 @@
-import 'package:flutter/material.dart';
+import 'package:consumer_app/screens/article_feed_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/material.dart';
+
+// This assumes you have a firebase_options.dart file from `flutterfire configure`
 import 'firebase_options.dart';
-import 'pages/home_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,15 +19,14 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Lumina',
+      title: 'Lumina Summaries',
       theme: ThemeData(
-        // The primary color swatch is used for elements like the 'Read More' button
-        // and other accents throughout the app.
         primarySwatch: Colors.indigo,
-        useMaterial3: true,
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: Colors.black,
       ),
       debugShowCheckedModeBanner: false,
-      home: const HomePage(),
+      home: const ArticleFeedScreen(),
     );
   }
 }

@@ -213,6 +213,27 @@ const HomePage: React.FC = () => {
     );
 };
 
+const ShareIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3s3-1.34 3-3-1.34-3-3-3z" />
+    </svg>
+);
+
+const handleShare = async (article: Article) => {
+    const shareUrl = `${window.location.origin}${window.location.pathname}#/view/${article.id}`;
+    const shareData = {
+        title: article.title,
+        text: `Read on Lumina: ${article.title}`,
+        url: shareUrl,
+    };
+
+    if (navigator.share) {
+        await navigator.share(shareData).catch(err => console.error('Share failed:', err));
+    } else {
+        navigator.clipboard.writeText(shareUrl).then(() => alert('Link copied to clipboard!'));
+    }
+};
+
 const ArticleFeedPage: React.FC = () => {
     const [articles, setArticles] = useState<Article[]>([]);
     const [loading, setLoading] = useState(true);
@@ -234,46 +255,58 @@ const ArticleFeedPage: React.FC = () => {
     return (
         <div className="h-screen w-screen overflow-y-scroll snap-y snap-mandatory bg-black">
             <PublicHeader />
-            {articles.map(article => (
-                <section key={article.id} className="h-screen w-full snap-start flex items-center justify-center relative text-white p-8">
-                    {article.imageUrl && (
-                        <div 
-                            className="absolute inset-0 bg-cover bg-center transition-all duration-500" 
-                            style={{ backgroundImage: `url(${article.imageUrl})` }}
-                        >
-                            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
-                        </div>
-                    )}
-                    <div className="relative z-10 max-w-2xl text-center flex flex-col items-center h-full justify-center">
-                        <div className="flex-grow flex flex-col items-center justify-center">
-                            <h1 className="text-4xl md:text-5xl font-extrabold mb-4" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>{article.title}</h1>
-                            {/* Using whitespace-pre-wrap to respect newlines in plain text flashContent */}
-                            <p className="text-lg md:text-xl mb-8 leading-relaxed whitespace-pre-wrap">{article.flashContent}</p>
-                            {article.sourceTitle && (
-                                <div className="mb-8 text-sm bg-black/30 backdrop-blur-sm p-3 rounded-lg">
-                                    Source: {article.sourceUrl ? (
-                                        <a href={article.sourceUrl} target="_blank" rel="noopener noreferrer" className="font-semibold underline hover:text-gray-200 transition">
-                                            {article.sourceTitle}
-                                        </a>
-                                    ) : <span className="font-semibold">{article.sourceTitle}</span>}
-                                </div>
-                            )}
-                        </div>
-                        {((article.articleType === 'Misinformation' && article.deepDiveContent) || article.sourceUrl) && (
-                            <a
-                                href={(article.articleType === 'Misinformation' && article.deepDiveContent) ? `#/view/${article.id}` : article.sourceUrl!}
-                                target={(article.articleType === 'Misinformation' && article.deepDiveContent) ? '_self' : '_blank'}
-                                rel="noopener noreferrer"
-                                className="mt-auto bg-white text-brand-text-primary font-bold py-3 px-8 rounded-full hover:bg-gray-200 transition-transform transform hover:scale-105"
-                            >
-                                {(article.articleType === 'Misinformation' && article.deepDiveContent)
-                                    ? 'Read Full Story'
-                                    : `Read at ${article.sourceTitle || 'Source'}`}
-                            </a>
+            {articles.map(article => {
+                const hasDeepDive = article.articleType === 'Misinformation' && article.deepDiveContent;
+                const readLink = hasDeepDive ? `#/view/${article.id}` : article.sourceUrl!;
+                const readTarget = hasDeepDive ? '_self' : '_blank';
+                const readButtonText = hasDeepDive ? 'Read Full Story' : `Read at ${article.sourceTitle || 'Source'}`;
+
+                return (
+                    <section key={article.id} className="h-screen w-full snap-start flex flex-col relative text-white bg-gray-900">
+                        {/* Layer 1: Background Image */}
+                        {article.imageUrl && (
+                            <div
+                                className="absolute inset-0 bg-cover bg-center"
+                                style={{ backgroundImage: `url(${article.imageUrl})` }}
+                            />
                         )}
-                    </div>
-                </section>
-            ))}
+                        {/* Layer 2: Gradient Overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-transparent" />
+
+                        {/* Layer 3: Content */}
+                        <div className="relative z-10 flex flex-col h-full p-6 md:p-8">
+                            <div className="flex-grow" /> {/* Spacer */}
+                            <div className="max-w-3xl mx-auto w-full">
+                                <h1 className="text-3xl md:text-4xl font-extrabold mb-4" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
+                                    {article.title}
+                                </h1>
+                                <p className="text-base md:text-lg mb-8 leading-relaxed max-h-40 overflow-y-auto">
+                                    {article.flashContent}
+                                </p>
+                                <div className="flex justify-between items-center text-sm">
+                                    {/* Left: Source */}
+                                    <div className="flex-1 text-left">
+                                        <p className="text-gray-400 text-xs">Source</p>
+                                        <p className="font-semibold">{article.sourceTitle || 'N/A'}</p>
+                                    </div>
+                                    {/* Middle: Read Button */}
+                                    <div className="flex-1 text-center">
+                                        <a href={readLink} target={readTarget} rel="noopener noreferrer" className="bg-white text-black font-bold py-3 px-6 rounded-full hover:bg-gray-200 transition-transform transform hover:scale-105 inline-block">
+                                            {readButtonText}
+                                        </a>
+                                    </div>
+                                    {/* Right: Share Button */}
+                                    <div className="flex-1 text-right">
+                                        <button onClick={() => handleShare(article)} className="p-3 rounded-full hover:bg-white/20 transition">
+                                            <ShareIcon className="w-6 h-6" />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                )
+            })}
         </div>
     );
 };

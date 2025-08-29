@@ -3,57 +3,47 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class Article {
   final String id;
   final String title;
-  final String flashContent;
-  final String deepDiveContent;
-  final String? imageUrl;
   final String articleType;
   final List<String> categories;
-  final String sourceTitle;
-  final String sourceUrl;
-  final String status;
-  final DateTime? publishedAt; // ✅ new field
+  final String? flashContent;
+  final String? deepDiveContent;
+  final String? imageUrl;
+  final String? sourceUrl;
+  final String? sourceTitle;
+  final Timestamp? publishedAt;
 
   Article({
     required this.id,
     required this.title,
-    required this.flashContent,
-    required this.deepDiveContent,
-    this.imageUrl,
     required this.articleType,
     required this.categories,
-    required this.sourceTitle,
-    required this.sourceUrl,
-    required this.status,
+    this.flashContent,
+    this.deepDiveContent,
+    this.imageUrl,
+    this.sourceUrl,
+    this.sourceTitle,
     this.publishedAt,
   });
 
-  // Factory constructor to create an Article from a Firestore document
-  factory Article.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-
-    // Safely parse publishedAt
-    DateTime? publishedDate;
-    if (data['publishedAt'] != null) {
-      if (data['publishedAt'] is Timestamp) {
-        publishedDate = (data['publishedAt'] as Timestamp).toDate();
-      } else if (data['publishedAt'] is String) {
-        // fallback in case some old records are strings
-        publishedDate = DateTime.tryParse(data['publishedAt']);
-      }
+  factory Article.fromFirestore(
+    DocumentSnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    final data = snapshot.data();
+    if (data == null) {
+      throw StateError('Missing data for articleId: ${snapshot.id}');
     }
 
     return Article(
-      id: doc.id,
-      title: data['title'] ?? 'No Title',
-      flashContent: data['flashContent'] ?? '',
-      deepDiveContent: data['deepDiveContent'] ?? '',
-      imageUrl: data['imageUrl'],
-      articleType: data['articleType'] ?? 'Normal',
+      id: snapshot.id,
+      title: data['title'] ?? '',
+      articleType: data['articleType'] ?? 'Trending Topic',
       categories: List<String>.from(data['categories'] ?? []),
-      sourceTitle: data['sourceTitle'] ?? '',
-      sourceUrl: data['sourceUrl'] ?? '',
-      status: data['status'] ?? '',
-      publishedAt: publishedDate, // ✅
+      flashContent: data['flashContent'],
+      deepDiveContent: data['deepDiveContent'],
+      imageUrl: data['imageUrl'],
+      sourceUrl: data['sourceUrl'],
+      sourceTitle: data['sourceTitle'],
+      publishedAt: data['publishedAt'] as Timestamp?,
     );
   }
 }

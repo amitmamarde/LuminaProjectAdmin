@@ -1,87 +1,157 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_html/flutter_html.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/article_model.dart';
-import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 
+/// This screen displays the primary "flash card" view for an article,
+/// styled similarly to apps like Inshorts.
 class ArticleDetailScreen extends StatelessWidget {
   final Article article;
 
   const ArticleDetailScreen({super.key, required this.article});
 
-  Future<void> _launchUrl(String url) async {
-    final Uri uri = Uri.parse(url);
-    if (!await launchUrl(uri)) {
-      // In a real app, you might want to show a snackbar or dialog
-      debugPrint('Could not launch $url');
+  @override
+  Widget build(BuildContext context) {
+    final bool hasDeepDive = article.articleType == 'Misinformation';
+    final String readButtonText =
+        hasDeepDive ? 'Read Full Story' : 'Read at ${article.sourceTitle ?? 'Source'}';
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          // Layer 1: Background Image (takes up top ~60% of screen)
+          if (article.imageUrl != null && article.imageUrl!.isNotEmpty)
+            Positioned.fill(
+              child: CachedNetworkImage(
+                imageUrl: article.imageUrl!,
+                fit: BoxFit.cover,
+                placeholder: (context, url) => Container(color: Colors.grey[800]),
+                errorWidget: (context, url, error) => Container(
+                  color: Colors.grey[800],
+                  child: const Icon(Icons.broken_image, color: Colors.grey, size: 50),
+                ),
+              ),
+            ),
+          // Layer 2: Gradient overlay for text readability
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.4),
+                    Colors.black.withOpacity(0.9),
+                    Colors.black,
+                  ],
+                  stops: const [0.0, 0.4, 0.6, 1.0],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            ),
+          ),
+          // Layer 3: Content and Actions
+          Positioned.fill(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    article.title,
+                    style: GoogleFonts.lato(
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      shadows: [const Shadow(blurRadius: 4, color: Colors.black54)],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    article.flashContent ?? 'Summary not available.',
+                    style: GoogleFonts.lato(
+                      fontSize: 16,
+                      color: Colors.grey[300],
+                      height: 1.5,
+                    ),
+                    maxLines: 5,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const Spacer(), // Pushes content to the bottom
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // Left: Source
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Source', style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+                            Text(
+                              article.sourceTitle ?? 'N/A',
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Middle: Read Button
+                      ElevatedButton(
+                        onPressed: () => _launchAction(context),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        ),
+                        child: Text(readButtonText, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                      // Right: Share Button
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: IconButton(
+                            icon: const Icon(Icons.share, color: Colors.white),
+                            onPressed: () => _shareArticle(context),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _launchAction(BuildContext context) {
+    final bool hasDeepDive = article.articleType == 'Misinformation';
+    // For Misinformation, link to the web deep-dive. Otherwise, link to the original source.
+    final String urlToLaunch = hasDeepDive
+        ? 'https://luminaprojectadmin.netlify.app/#/view/${article.id}'
+        : article.sourceUrl ?? '';
+
+    if (urlToLaunch.isNotEmpty) {
+      launchUrl(Uri.parse(urlToLaunch), mode: LaunchMode.externalApplication);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open link.')),
+      );
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(article.title, style: const TextStyle(color: Colors.black87, fontSize: 18)),
-        backgroundColor: Colors.white,
-        elevation: 1,
-        iconTheme: const IconThemeData(color: Colors.black87),
-      ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (article.imageUrl != null)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12.0),
-                  child: Image.network(
-                    article.imageUrl!,
-                    width: double.infinity,
-                    height: 250,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              const SizedBox(height: 16),
-              Text(
-                article.title,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              if (article.publishedAt != null)
-                Text(
-                  'Published on ${DateFormat.yMMMMd().format(article.publishedAt!.toDate())}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
-                ),
-              const SizedBox(height: 8),
-              Text(
-                article.categories.join(', '),
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).primaryColor, fontWeight: FontWeight.w600),
-              ),
-              if (article.sourceUrl != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12.0),
-                  child: InkWell(
-                    onTap: () => _launchUrl(article.sourceUrl!),
-                    child: Text(
-                      'Source: ${article.sourceTitle ?? 'Read original article'}',
-                      style: const TextStyle(color: Colors.blue, decoration: TextDecoration.underline),
-                    ),
-                  ),
-                ),
-              const Divider(height: 32),
-              Html(
-                data: article.deepDiveContent ?? '<p>No content available.</p>',
-                onLinkTap: (url, _, __) {
-                  if (url != null) {
-                    _launchUrl(url);
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  void _shareArticle(BuildContext context) {
+    final String shareUrl = 'https://luminaprojectadmin.netlify.app/#/view/${article.id}';
+    final String shareText = '${article.title}\n\nRead more on Lumina:';
+
+    Share.share('$shareText $shareUrl', subject: article.title);
   }
 }
