@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:consumer_app/models/article.dart';
 import 'package:consumer_app/screens/article_detail_screen.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
+import 'package:consumer_app/widgets/article_feed_card.dart';
 
 class ArticleFeedScreen extends StatefulWidget {
   const ArticleFeedScreen({super.key});
@@ -65,8 +66,7 @@ class _ArticleFeedScreenState extends State<ArticleFeedScreen> {
           return PageView.builder(
             scrollDirection: Axis.vertical,
             itemCount: articles.length,
-            itemBuilder: (context, index) =>
-                ArticleDetailScreen(article: articles[index]),
+            itemBuilder: (context, index) => ArticleFeedCard(article: articles[index]),
           );
         },
       ),
