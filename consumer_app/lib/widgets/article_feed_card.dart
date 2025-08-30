@@ -13,119 +13,94 @@ class ArticleFeedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Get the correct theme for the article type, or use a default.
-    final theme = articleTypeThemes[article.articleType] ?? defaultTheme;
-    final hasImage = article.imageUrl != null && article.imageUrl!.isNotEmpty;
-
-    // Conditionally set colors for readability based on whether there's an image.
-    final titleColor = hasImage ? Colors.white : theme.text;
-    final contentColor = hasImage ? Colors.grey[200]! : theme.textSecondary;
-    final sourceMetaColor = hasImage ? Colors.grey[400]! : theme.textSecondary;
-    final sourceTitleColor = hasImage ? Colors.grey[200]! : theme.text;
-    final shareIconColor = hasImage ? Colors.white : theme.text;
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // Layer 1: Base background color from theme.
-        // THIS IS THE KEY FIX for the black background issue.
-        Container(color: theme.base),
-
-        // Layer 2: Background Image (if it exists)
-        if (hasImage)
-          CachedNetworkImage(
-            imageUrl: article.imageUrl!,
-            fit: BoxFit.cover,
-            placeholder: (context, url) =>
-                Container(color: theme.base.withOpacity(0.5)),
-            errorWidget: (context, url, error) => const Icon(Icons.error),
-          ),
-
-        // Layer 3: Gradient Overlay (only if there's an image for text readability)
-        if (hasImage)
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.black, Colors.black87, Colors.transparent],
-                begin: Alignment.bottomCenter,
-                end: Alignment.topCenter,
-                stops: [0.0, 0.4, 1.0],
+    // Simplified UI with a clean, basic layout as requested for temporary review.
+    return Container(
+      color: Colors.white,
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top 40% placeholder for an image.
+            Container(
+              height: MediaQuery.of(context).size.height * 0.35,
+              width: double.infinity,
+              color: Colors.grey[200],
+              child: Center(
+                child: Text(
+                  'Lumina',
+                  style: GoogleFonts.lato(
+                    fontSize: 48,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black.withOpacity(0.15),
+                  ),
+                ),
               ),
             ),
-          ),
-
-        // Layer 4: Content
-        SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  article.title,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.playfairDisplay(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w700,
-                    color: titleColor,
-                    shadows: const [
-                      Shadow(
-                        blurRadius: 8.0,
-                        color: Colors.black54,
-                        offset: Offset(2, 2),
+            // Content section with title and scrollable flash content.
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      article.title,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.lato(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 16),
+                    // The content now fits without scrolling inside the card.
+                    Expanded(
+                      child: Text(
+                        article.flashContent ?? 'No summary available.',
+                        // No maxLines needed; Expanded will give it the available space.
+                        // Ellipsis will handle cases where content is still too long.
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.lato(
+                          fontSize: 16,
+                          color: Colors.black.withOpacity(0.8),
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  article.flashContent ?? '',
-                  maxLines: 4,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.lato(
-                    fontSize: 16,
-                    color: contentColor,
-                    height: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                _buildBottomBar(
-                  context,
-                  article,
-                  sourceMetaColor,
-                  sourceTitleColor,
-                  shareIconColor,
-                ),
-              ],
+              ),
             ),
-          ),
+            // Bottom bar, fixed at the bottom of the view.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+              child: _buildBottomBar(context, article),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
   Widget _buildBottomBar(
     BuildContext context,
     Article article,
-    Color sourceMetaColor,
-    Color sourceTitleColor,
-    Color shareIconColor,
   ) {
-    final hasDeepDive =
-        article.articleType == 'Misinformation' &&
-        (article.deepDiveContent?.isNotEmpty ?? false);
+    final hasDeepDive = article.articleType == 'Misinformation' && (article.deepDiveContent?.isNotEmpty ?? false);
+    
     final readLink = hasDeepDive ? '#/view/${article.id}' : article.sourceUrl;
-    final readButtonText = hasDeepDive
-        ? 'Read Full Story'
-        : 'Read at ${article.sourceTitle ?? 'Source'}';
+    final readButtonText = hasDeepDive ? 'Read Full Story' : 'Read at ${article.sourceTitle ?? 'Source'}';
+    
+    // Simplified colors for the new design.
+    const sourceMetaColor = Colors.black54;
+    const sourceTitleColor = Colors.black;
+    const shareIconColor = Colors.black;
 
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // Left: Source
+        // Source Info
         Expanded(
           flex: 2,
           child: Column(
@@ -133,7 +108,10 @@ class ArticleFeedCard extends StatelessWidget {
             children: [
               Text(
                 'Source',
-                style: GoogleFonts.lato(fontSize: 12, color: sourceMetaColor),
+                style: GoogleFonts.lato(
+                  color: sourceMetaColor,
+                  fontSize: 12,
+                ),
               ),
               Text(
                 article.sourceTitle ?? 'N/A',
@@ -147,7 +125,7 @@ class ArticleFeedCard extends StatelessWidget {
             ],
           ),
         ),
-        // Middle: Read Button
+        // Read Button
         Expanded(
           flex: 3,
           child: Center(
@@ -156,38 +134,45 @@ class ArticleFeedCard extends StatelessWidget {
                 if (readLink != null && readLink.isNotEmpty) {
                   if (hasDeepDive) {
                     // TODO: Navigate to your deep dive detail screen
+                    // For now, we'll just show a snackbar as a placeholder.
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text(
-                          "Navigate to deep dive for ${article.id}",
-                        ),
+                        content: Text("Navigating to deep dive for ${article.id}"),
                       ),
                     );
                   } else {
-                    if (await canLaunchUrl(Uri.parse(readLink))) {
-                      launchUrl(
-                        Uri.parse(readLink),
+                    final uri = Uri.parse(readLink);
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(
+                        uri,
                         mode: LaunchMode.externalApplication,
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Could not launch $readLink')),
                       );
                     }
                   }
                 }
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
                 shape: const StadiumBorder(),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24,
-                  vertical: 14,
+                  vertical: 12, // Reduced vertical padding
                 ),
                 textStyle: GoogleFonts.lato(fontWeight: FontWeight.bold),
               ),
-              child: Text(readButtonText),
+              child: FittedBox(
+                fit: BoxFit.scaleDown, // Scales text down to fit in one line
+                child: Text(readButtonText),
+              ),
             ),
           ),
         ),
-        // Right: Share Button
+        // Share Button
         Expanded(
           flex: 2,
           child: Align(
@@ -196,8 +181,7 @@ class ArticleFeedCard extends StatelessWidget {
               icon: Icon(Icons.share, color: shareIconColor),
               onPressed: () {
                 // TODO: Replace with your app's public URL
-                final shareUrl =
-                    'https://your-app-domain.com/#/view/${article.id}';
+                final shareUrl = 'https://your-app-domain.com/#/view/${article.id}';
                 Share.share('Read on Lumina: ${article.title}\n$shareUrl');
               },
             ),
