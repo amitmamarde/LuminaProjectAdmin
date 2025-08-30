@@ -67,7 +67,7 @@ const ARTICLE_TYPE_THEMES: Record<ArticleType, {
     textSecondary: 'text-research-text/80',
     prose: 'prose-blue-lumina',
   },
-    base: 'bg-misinformation-base',
+  'Misinformation': { base: 'bg-misinformation-base',
     accent: 'text-misinformation-accent',
     text: 'text-misinformation-text',
     textSecondary: 'text-misinformation-text/80',
