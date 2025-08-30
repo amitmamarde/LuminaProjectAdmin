@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:consumer_app/models/article.dart'; // Make sure this path is correct for your Article model
-import 'package:consumer_app/theme/article_themes.dart';
+import 'package:consumer_app/theme/article_themes.dart'; // Import the themes
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -13,9 +13,11 @@ class ArticleFeedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Simplified UI with a clean, basic layout as requested for temporary review.
+    // Determine the theme based on the article type, with a fallback to the default.
+    final theme = articleTypeThemes[article.articleType] ?? defaultTheme;
+
     return Container(
-      color: Colors.white,
+      color: theme.base, // Use the theme's base color for the background
       child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -50,7 +52,7 @@ class ArticleFeedCard extends StatelessWidget {
                       style: GoogleFonts.lato(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
-                        color: Colors.black,
+                        color: theme.text, // Use theme's primary text color
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -58,13 +60,11 @@ class ArticleFeedCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         article.flashContent ?? 'No summary available.',
-                        // No maxLines needed; Expanded will give it the available space.
-                        // Ellipsis will handle cases where content is still too long.
-                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.lato(
                           fontSize: 16,
-                          color: Colors.black.withOpacity(0.8),
-                          height: 1.5,
+                          color: theme
+                              .textSecondary, // Use theme's secondary text color
+                          height: 1.5, // Keep line height for readability
                         ),
                       ),
                     ),
@@ -75,7 +75,7 @@ class ArticleFeedCard extends StatelessWidget {
             // Bottom bar, fixed at the bottom of the view.
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
-              child: _buildBottomBar(context, article),
+              child: _buildBottomBar(context, article, theme),
             ),
           ],
         ),
@@ -86,16 +86,16 @@ class ArticleFeedCard extends StatelessWidget {
   Widget _buildBottomBar(
     BuildContext context,
     Article article,
+    ArticleTheme theme,
   ) {
-    final hasDeepDive = article.articleType == 'Misinformation' && (article.deepDiveContent?.isNotEmpty ?? false);
-    
+    final hasDeepDive =
+        article.articleType == 'Misinformation' &&
+        (article.deepDiveContent?.isNotEmpty ?? false);
+
     final readLink = hasDeepDive ? '#/view/${article.id}' : article.sourceUrl;
-    final readButtonText = hasDeepDive ? 'Read Full Story' : 'Read at ${article.sourceTitle ?? 'Source'}';
-    
-    // Simplified colors for the new design.
-    const sourceMetaColor = Colors.black54;
-    const sourceTitleColor = Colors.black;
-    const shareIconColor = Colors.black;
+    final readButtonText = hasDeepDive
+        ? 'Read Full Story'
+        : 'Read at ${article.sourceTitle ?? 'Source'}';
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -109,7 +109,7 @@ class ArticleFeedCard extends StatelessWidget {
               Text(
                 'Source',
                 style: GoogleFonts.lato(
-                  color: sourceMetaColor,
+                  color: theme.textSecondary,
                   fontSize: 12,
                 ),
               ),
@@ -119,7 +119,7 @@ class ArticleFeedCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.lato(
                   fontWeight: FontWeight.bold,
-                  color: sourceTitleColor,
+                  color: theme.text,
                 ),
               ),
             ],
@@ -137,7 +137,9 @@ class ArticleFeedCard extends StatelessWidget {
                     // For now, we'll just show a snackbar as a placeholder.
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text("Navigating to deep dive for ${article.id}"),
+                        content: Text(
+                          "Navigating to deep dive for ${article.id}",
+                        ),
                       ),
                     );
                   } else {
@@ -178,10 +180,11 @@ class ArticleFeedCard extends StatelessWidget {
           child: Align(
             alignment: Alignment.centerRight,
             child: IconButton(
-              icon: Icon(Icons.share, color: shareIconColor),
+              icon: Icon(Icons.share, color: theme.text),
               onPressed: () {
                 // TODO: Replace with your app's public URL
-                final shareUrl = 'https://your-app-domain.com/#/view/${article.id}';
+                final shareUrl =
+                    'https://your-app-domain.com/#/view/${article.id}';
                 Share.share('Read on Lumina: ${article.title}\n$shareUrl');
               },
             ),

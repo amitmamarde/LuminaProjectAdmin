@@ -574,6 +574,7 @@ const LoginPage: React.FC = () => {
 const DashboardPage: React.FC = () => {
     const { userData } = useAuth();
     const [isRequeuing, setIsRequeuing] = useState(false);
+    const [isBatchTesting, setIsBatchTesting] = useState(false);
     const [isTestingSources, setIsTestingSources] = useState(false);
     const [testFeedback, setTestFeedback] = useState('');
     const [feedback, setFeedback] = useState('');
@@ -660,6 +661,27 @@ const DashboardPage: React.FC = () => {
         }
     };
 
+    const handleBatchRssTest = async () => {
+        if (!window.confirm('This will test ALL RSS feeds in batches of 5, fetching 2 articles from each. This will create new draft articles and may take several minutes and incur costs. Continue?')) {
+            return;
+        }
+        setIsBatchTesting(true);
+        setTestFeedback('');
+        try {
+            const testFunction = httpsCallable(functions, 'testAllRssFeedsInBatches');
+            // These parameters are passed to the cloud function
+            const result = await testFunction({ batchSize: 5, articlesPerFeed: 2 });
+            const data = result.data as { success: boolean; message: string; reportId: string };
+            setTestFeedback(data.message || 'Batch RSS test completed. Check Firestore for the report.');
+        } catch (error: any) {
+            console.error("Error testing RSS feeds in batches:", error);
+            setTestFeedback(`Error: ${error.message || 'Failed to start batch RSS test.'}`);
+        } finally {
+            setIsBatchTesting(false);
+            setTimeout(() => setTestFeedback(''), 10000);
+        }
+    };
+
     return (
         <div className="bg-brand-background min-h-screen">
             <Header />
@@ -668,16 +690,19 @@ const DashboardPage: React.FC = () => {
                     <h1 className="text-3xl font-bold text-brand-text-primary">Dashboard</h1>
                     {userData.role === 'Admin' && (
                         <div className="flex flex-wrap gap-2">
-                            <button onClick={handleMicroSampleTestSource} disabled={isTestingSources} className="bg-orange-500 text-white py-2 px-4 rounded-md hover:bg-orange-600 disabled:bg-orange-300 transition">
+                            <button onClick={handleBatchRssTest} disabled={isTestingSources || isBatchTesting} className="bg-cyan-600 text-white py-2 px-4 rounded-md hover:bg-cyan-700 disabled:bg-cyan-300 transition">
+                                {isBatchTesting ? 'Testing...' : 'Test All RSS Feeds (Batched)'}
+                            </button>
+                            <button onClick={handleMicroSampleTestSource} disabled={isTestingSources || isBatchTesting} className="bg-orange-500 text-white py-2 px-4 rounded-md hover:bg-orange-600 disabled:bg-orange-300 transition">
                                 {isTestingSources ? 'Testing...' : 'Micro Test (4 Articles)'}
                             </button>
-                            <button onClick={handleSampleTestSource} disabled={isTestingSources} className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-blue-300 transition">
+                            <button onClick={handleSampleTestSource} disabled={isTestingSources || isBatchTesting} className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-blue-300 transition">
                                 {isTestingSources ? 'Testing...' : 'Test Sample Sources (RSS)'}
                             </button>
                             {/* <button onClick={handleTestSource} disabled={isTestingSources} className="bg-teal-600 text-white py-2 px-4 rounded-md hover:bg-teal-700 disabled:bg-teal-300 transition">
                                 {isTestingSources ? 'Testing All...' : 'Test All Sources'}
                             </button> */}
-                            <button onClick={handleRequeueAll} disabled={isRequeuing || isTestingSources} className="bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 disabled:bg-purple-300 transition">
+                            <button onClick={handleRequeueAll} disabled={isRequeuing || isTestingSources || isBatchTesting} className="bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 disabled:bg-purple-300 transition">
                                 {isRequeuing ? 'Re-queueing...' : 'Re-queue All Failed'}
                             </button>
                         </div>

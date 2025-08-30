@@ -1005,6 +1005,83 @@ export const testMicroSampleSources = onCall({
 });
 
 /**
+ * A callable function for admins to test all RSS feeds from the registry in batches.
+ * This provides a thorough, low-cost way to ensure all RSS sources are working.
+ */
+export const testAllRssFeedsInBatches = onCall({
+    region: "europe-west1",
+    cors: [/luminaprojectadmin\.netlify\.app$/, "http://localhost:5173"],
+    timeoutSeconds: 540, // Allow up to 9 minutes for all sources to be tested.
+}, async (request) => {
+    // 1. Auth check
+    if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'The function must be called while authenticated.');
+    }
+    const userDoc = await db.collection('users').doc(request.auth.uid).get();
+    if (!userDoc.exists || userDoc.data().role !== 'Admin') {
+        throw new HttpsError('permission-denied', 'Only admins can run this source test.');
+    }
+
+    // 2. Get parameters from request, with defaults
+    const batchSize = request.data?.batchSize || 5;
+    const articlesPerFeed = request.data?.articlesPerFeed || 2;
+
+    console.log(`[RSS Batch Test] Starting test run, initiated by ${userDoc.data().email}. Batch size: ${batchSize}, Articles/feed: ${articlesPerFeed}`);
+
+    // 3. Create a report document
+    const reportRef = db.collection('sourceTestReports').doc();
+    await reportRef.set({
+        status: 'Running',
+        testType: `RSS Batch (size ${batchSize})`,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        totalSources: 0,
+        successCount: 0,
+        failureCount: 0,
+        triggeredBy: userDoc.data().email,
+    });
+
+    // 4. Get all RSS sources from the registry
+    const allRssSources = [];
+    for (const pillar in SOURCE_REGISTRY.sources) {
+        if (!Object.prototype.hasOwnProperty.call(SOURCE_REGISTRY.sources, pillar)) continue;
+        for (const region in SOURCE_REGISTRY.sources[pillar]) {
+            if (!Object.prototype.hasOwnProperty.call(SOURCE_REGISTRY.sources[pillar], region) || region === 'notes') continue;
+            const allowlist = SOURCE_REGISTRY.sources[pillar][region].allowlist || [];
+            for (const source of allowlist) {
+                if (source.rssUrl) {
+                    allRssSources.push({ ...source, pillar, region });
+                }
+            }
+        }
+    }
+
+    await reportRef.update({ totalSources: allRssSources.length });
+
+    // 5. Process sources in batches
+    for (let i = 0; i < allRssSources.length; i += batchSize) {
+        const chunk = allRssSources.slice(i, i + batchSize);
+        console.log(`[RSS Batch Test] Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(allRssSources.length / batchSize)} with ${chunk.length} sources.`);
+
+        const batchPromises = chunk.map(source => processSingleRssFeedTest(source, reportRef, { limit: articlesPerFeed }));
+        await Promise.allSettled(batchPromises);
+        
+        if (i + batchSize < allRssSources.length) {
+            console.log(`[RSS Batch Test] Batch complete. Waiting 10 seconds before next batch.`);
+            await delay(10000); // 10-second delay between batches
+        }
+    }
+
+    // 6. Finalize report
+    const finalReportSnap = await reportRef.get();
+    const finalData = finalReportSnap.data();
+    await reportRef.update({ status: 'Completed', completedAt: admin.firestore.FieldValue.serverTimestamp() });
+
+    const summary = `RSS batch test completed. Report ID: ${reportRef.id}. Success: ${finalData.successCount}, Failure: ${finalData.failureCount}`;
+    console.log(`[RSS Batch Test] ${summary}`);
+    return { success: true, message: summary, reportId: reportRef.id };
+});
+
+/**
  * Generates an image using an external API and returns its URL.
  * This is a callable function, which handles CORS automatically for allowed origins.
  * NOTE: This is a placeholder implementation. You will need to replace the
