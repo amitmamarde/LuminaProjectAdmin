@@ -10,7 +10,7 @@ export enum ArticleStatus {
   Published = 'Published',
 }
 
-export type ArticleType = 'Trending Topic' | 'Positive News' | 'Misinformation';
+export type ArticleType = 'Trending Topic' | 'Positive News' | 'Misinformation' | 'Research Breakthrough';
 
 export interface UserProfile {
   uid: string;

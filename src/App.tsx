@@ -67,6 +67,12 @@ const ARTICLE_TYPE_THEMES: Record<ArticleType, {
     textSecondary: 'text-research-text/80',
     prose: 'prose-blue-lumina',
   },
+   'Research Breakthrough': {
+    base: 'bg-blue-100',
+    accent: 'text-blue-500',
+    text: 'text-blue-800',
+    textSecondary: 'text-blue-500',
+    prose: 'prose-blue' },
   'Misinformation': {
     base: 'bg-misinformation-base',
     accent: 'text-misinformation-accent',
