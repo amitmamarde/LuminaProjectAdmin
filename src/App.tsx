@@ -293,13 +293,22 @@ const ArticleFeedPage: React.FC = () => {
         <div className="h-screen w-screen overflow-y-scroll snap-y snap-mandatory bg-black">
             <PublicHeader />
             {articles.map(article => {
+                const theme = ARTICLE_TYPE_THEMES[article.articleType] || ARTICLE_TYPE_THEMES['Trending Topic'];
                 const hasDeepDive = article.articleType === 'Misinformation' && article.deepDiveContent;
                 const readLink = hasDeepDive ? `#/view/${article.id}` : article.sourceUrl!;
                 const readTarget = hasDeepDive ? '_self' : '_blank';
                 const readButtonText = hasDeepDive ? 'Read Full Story' : `Read at ${article.sourceTitle || 'Source'}`;
 
+                // Conditionally set text colors for readability. If there's a background image,
+                // a dark gradient is applied, so we need light text. Otherwise, use theme colors.
+                const titleColor = article.imageUrl ? 'text-white' : theme.text;
+                const contentColor = article.imageUrl ? 'text-gray-200' : theme.textSecondary;
+                const sourceMetaColor = article.imageUrl ? 'text-gray-400' : theme.textSecondary;
+                const sourceTitleColor = article.imageUrl ? 'text-gray-200' : theme.text;
+                const shareButtonClasses = article.imageUrl ? 'text-white hover:bg-white/20' : `${theme.text} hover:bg-black/10`;
+
                 return (
-                    <section key={article.id} className="h-screen w-full snap-start flex flex-col relative text-white bg-gray-900">
+                    <section key={article.id} className={`h-screen w-full snap-start flex flex-col relative ${theme.base}`}>
                         {/* Layer 1: Background Image */}
                         {article.imageUrl && (
                             <div
@@ -307,24 +316,26 @@ const ArticleFeedPage: React.FC = () => {
                                 style={{ backgroundImage: `url(${article.imageUrl})` }}
                             />
                         )}
-                        {/* Layer 2: Gradient Overlay */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-transparent" />
+                        {/* Layer 2: Gradient Overlay (only if there's an image) */}
+                        {article.imageUrl &&
+                            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-transparent" />
+                        }
 
                         {/* Layer 3: Content */}
                         <div className="relative z-10 flex flex-col h-full p-6 md:p-8">
                             <div className="flex-grow" /> {/* Spacer */}
                             <div className="max-w-3xl mx-auto w-full">
-                                <h1 className="text-3xl md:text-4xl font-extrabold mb-4" style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
+                                <h1 className={`text-3xl md:text-4xl font-extrabold mb-4 ${titleColor}`} style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
                                     {article.title}
                                 </h1>
-                                <p className="text-base md:text-lg mb-8 leading-relaxed max-h-40 overflow-y-auto">
+                                <p className={`text-base md:text-lg mb-8 leading-relaxed max-h-40 overflow-y-auto ${contentColor}`}>
                                     {article.flashContent}
                                 </p>
                                 <div className="flex justify-between items-center text-sm">
                                     {/* Left: Source */}
                                     <div className="flex-1 text-left">
-                                        <p className="text-gray-400 text-xs">Source</p>
-                                        <p className="font-semibold">{article.sourceTitle || 'N/A'}</p>
+                                        <p className={`${sourceMetaColor} text-xs`}>Source</p>
+                                        <p className={`font-semibold ${sourceTitleColor}`}>{article.sourceTitle || 'N/A'}</p>
                                     </div>
                                     {/* Middle: Read Button */}
                                     <div className="flex-1 text-center">
@@ -334,7 +345,7 @@ const ArticleFeedPage: React.FC = () => {
                                     </div>
                                     {/* Right: Share Button */}
                                     <div className="flex-1 text-right">
-                                        <button onClick={() => handleShare(article)} className="p-3 rounded-full hover:bg-white/20 transition">
+                                        <button onClick={() => handleShare(article)} className={`p-3 rounded-full transition ${shareButtonClasses}`}>
                                             <ShareIcon className="w-6 h-6" />
                                         </button>
                                     </div>
