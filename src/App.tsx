@@ -43,7 +43,7 @@ const CATEGORIES = [
   'Digital & Media Literacy', 'Business & Finance', 'Environment & Sustainability',
   'Education & Learning', 'Arts, Media & Creativity'
 ];
-const ARTICLE_TYPES: ArticleType[] = ['Trending Topic', 'Positive News', 'Misinformation', 'Research Breakthroughs'];
+const ARTICLE_TYPES: ArticleType[] = ['Trending Topic', 'Positive News', 'Misinformation', 'Research Breakthrough'];
 const REGIONS = ['Worldwide', 'USA', 'India', 'Europe'];
 
 const ARTICLE_TYPE_THEMES: Record<ArticleType, {
@@ -60,7 +60,7 @@ const ARTICLE_TYPE_THEMES: Record<ArticleType, {
     textSecondary: 'text-positive-text/80',
     prose: 'prose-green-lumina',
   },
-  'Research Breakthroughs': {
+  'Research Breakthrough': {
     base: 'bg-research-base',
     accent: 'text-research-accent',
     text: 'text-research-text',

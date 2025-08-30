@@ -140,7 +140,7 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
       // --- Define prompts and schemas based on Article Type ---
       
       // For Trending and Positive news, we only generate a summary as we link to the source.
-      if (articleType === 'Trending Topic' || articleType === 'Positive News') {
+      if (articleType === 'Trending Topic' || articleType === 'Positive News' || articleType === 'Research Breakthrough') {
         console.log(`[${articleId}] Generating summary-only content for a '${articleType}' article.`);
 
         promptPersona = `You are a helpful summarizer for the "Lumina Content Platform". Your task is to create a flash summary for the topic: "${title}".`;
@@ -222,7 +222,7 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
         adminRevisionNotes: admin.firestore.FieldValue.delete(),
       };
  
-      if (articleType === 'Trending Topic' || articleType === 'Positive News') {
+      if (articleType === 'Trending Topic' || articleType === 'Positive News' || articleType === 'Research Breakthrough') {
           nextStatus = 'Published';
           updatePayload.status = nextStatus;
           updatePayload.publishedAt = admin.firestore.FieldValue.serverTimestamp();
@@ -533,7 +533,7 @@ async function processRssFeed(source, options = {}) {
             // Map pillar to ArticleType
             let articleType;
             if (pillar === 'positive_news') articleType = 'Positive News';
-            else if (pillar === 'research_breakthroughs') articleType = 'Research Breakthroughs';
+            else if (pillar === 'research_breakthroughs') articleType = 'Research Breakthrough';
             else if (pillar === 'general_quality_news') articleType = 'Trending Topic';
             else if (pillar === 'misinformation_watch') articleType = 'Misinformation';
             else continue; // Skip unknown pillars
@@ -638,7 +638,7 @@ async function processSingleSourceTest(source, reportRef, genAI) {
     let articleType;
     if (pillar === 'positive_news') articleType = 'Positive News';
     else if (pillar === 'general_quality_news') articleType = 'Trending Topic';
-    else if (pillar === 'research_breakthroughs') articleType = 'Trending Topic';
+    else if (pillar === 'research_breakthroughs') articleType = 'Research Breakthrough';
     else if (pillar === 'misinformation_watch') articleType = 'Misinformation';
     else {
         await reportResultsRef.doc(docId).set({

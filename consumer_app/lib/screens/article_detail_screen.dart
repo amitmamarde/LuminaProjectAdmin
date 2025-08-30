@@ -2,7 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../models/article_model.dart';
+import '../models/article.dart';
 import 'package:share_plus/share_plus.dart';
 
 /// This screen displays the primary "flash card" view for an article,
