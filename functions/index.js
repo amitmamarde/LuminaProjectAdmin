@@ -121,8 +121,7 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
             if (answer.toLowerCase().includes('no')) {
                 console.log(`[${articleId}] AI classified this as NOT positive news. Changing type to 'Trending Topic'.`);
                 articleType = 'Trending Topic'; // Update local variable for this run
-                // Update the document in the background. No need to await.
-                articleRef.update({ articleType: 'Trending Topic' });
+                // The articleType will be updated in the main payload below.
             } else {
                 console.log(`[${articleId}] AI confirmed this is positive news.`);
             }
@@ -216,6 +215,7 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
       // Trending/Positive News are auto-published. Misinformation goes to expert review.
       let nextStatus;
       const updatePayload = {
+        articleType: articleType, // Persist the final article type.
         flashContent: generatedText.flashContent,
         imagePrompt: generatedText.imagePrompt,
         // Clear any previous revision notes upon successful regeneration
@@ -289,12 +289,13 @@ export const generateArticleContent = onDocumentCreated({
       // Enqueue the task for processing by the 'processArticle' worker function.
       // Using the full resource name is more robust and can prevent "Queue does not exist" errors
       // that sometimes occur due to IAM propagation delays or resolution issues.
+      // First, update the status to 'Queued' to prevent a race condition where the
+      // worker function could finish before this status update is committed.
+      await snapshot.ref.update({ status: 'Queued' });
+
       const functionName = "projects/lumina-summaries/locations/europe-west1/functions/processArticle";
       const queue = getFunctions().taskQueue(functionName);
       await queue.enqueue({ articleId: articleId });
-
-      // Update the article status to 'Queued' to provide UI feedback and prevent re-triggering.
-      await snapshot.ref.update({ status: 'Queued' });
 
       console.log(`[${articleId}] Successfully queued for generation.`);
     } catch (error) {
@@ -415,10 +416,11 @@ export const requeueAllFailedArticles = onCall(
                 // This is more efficient than enqueueing one by one in a loop.
                 // The v2 SDK handles an array of task objects correctly, creating
                 // one task for each object in the array.
-                await queue.enqueue(tasksToEnqueue);
-
-                // If enqueueing succeeds, then commit the Firestore status updates.
+                // First, commit the Firestore status updates to prevent a race condition.
                 await firestoreBatch.commit();
+
+                // Then, if the status update succeeds, enqueue the tasks.
+                await queue.enqueue(tasksToEnqueue);
 
                 requeuedCount += chunk.length;
                 console.log(`Successfully enqueued and updated status for ${chunk.length} articles.`);
@@ -485,6 +487,36 @@ function getSuggestionsFromApiResponse(response, context) {
 }
 
 /**
+ * Extracts an image URL from a parsed RSS item, checking common locations.
+ * @param {object} item The item object from the rss-parser library.
+ * @returns {string|null} The URL of the image or null if not found.
+ */
+function getImageUrlFromRssItem(item) {
+    // 1. Check for 'media:content' which is common in Media RSS (MRSS)
+    if (item['media:content'] && item['media:content'].$ && item['media:content'].$.url) {
+        return item['media:content'].$.url;
+    }
+
+    // 2. Check for the standard 'enclosure' tag
+    if (item.enclosure && item.enclosure.url && item.enclosure.type && item.enclosure.type.startsWith('image/')) {
+        return item.enclosure.url;
+    }
+
+    // 3. Check for 'media:thumbnail'
+    if (item['media:thumbnail'] && item['media:thumbnail'].$ && item['media:thumbnail'].$.url) {
+        return item['media:thumbnail'].$.url;
+    }
+
+    // 4. Fallback: search for the first <img> tag in the content string
+    const content = item.content || item.contentSnippet || item['content:encoded'] || '';
+    const match = content.match(/<img[^>]+src="([^">]+)"/);
+    if (match && match[1]) {
+        return match[1];
+    }
+
+    return null; // No image found
+}
+/**
  * Processes a single RSS feed to find and create new article drafts.
  * @param {object} source The source object from the registry, including rssUrl.
  * @param {object} [options] - Optional parameters.
@@ -538,6 +570,9 @@ async function processRssFeed(source, options = {}) {
             else if (pillar === 'misinformation_watch') articleType = 'Misinformation';
             else continue; // Skip unknown pillars
 
+            // Attempt to get the image URL from the RSS item
+            const imageUrl = getImageUrlFromRssItem(item);
+
             // Create new article draft
             const newArticleRef = db.collection('articles').doc();
             const articleData = {
@@ -551,7 +586,8 @@ async function processRssFeed(source, options = {}) {
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 discoveredAt: item.isoDate ? new Date(item.isoDate) : admin.firestore.FieldValue.serverTimestamp(),
                 sourceUrl: sourceUrl,
-                sourceTitle: feed.title || domain,
+                sourceTitle: source.sourceName || feed.title || domain,
+                imageUrl: imageUrl, // Add the extracted image URL
                 discoveryMethod: 'RSS',
             };
 
@@ -975,12 +1011,14 @@ export const testMicroSampleSources = onCall({
         {
             "domain": "apnews.com",
             "rssUrl": "https://apnews.com/hub/ap-top-news/rss",
+            "sourceName": "AP News",
             "pillar": "general_quality_news",
             "region": "Worldwide"
         },
         {
             "domain": "techcrunch.com",
             "rssUrl": "https://techcrunch.com/feed/",
+            "sourceName": "TechCrunch",
             "pillar": "research_breakthroughs",
             "region": "USA"
         }
@@ -1062,8 +1100,12 @@ export const testAllRssFeedsInBatches = onCall({
         const chunk = allRssSources.slice(i, i + batchSize);
         console.log(`[RSS Batch Test] Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(allRssSources.length / batchSize)} with ${chunk.length} sources.`);
 
-        const batchPromises = chunk.map(source => processSingleRssFeedTest(source, reportRef, { limit: articlesPerFeed }));
-        await Promise.allSettled(batchPromises);
+        // Process each source in the batch sequentially to be kinder to RSS servers and avoid potential rate-limiting.
+        for (const source of chunk) {
+            // Using allSettled to ensure one failure doesn't stop the whole batch.
+            await Promise.allSettled([processSingleRssFeedTest(source, reportRef, { limit: articlesPerFeed })]);
+            await delay(200); // Add a small 200ms delay between each feed request in the batch.
+        }
         
         if (i + batchSize < allRssSources.length) {
             console.log(`[RSS Batch Test] Batch complete. Waiting 10 seconds before next batch.`);
