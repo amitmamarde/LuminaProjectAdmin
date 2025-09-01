@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:consumer_app/models/article_model.dart';
-import 'package:consumer_app/screens/article_detail_page.dart';
+// import 'package:consumer_app/screens/article_detail_page.dart'; // No longer used directly from this card
+import 'package:consumer_app/screens/article_webview_screen.dart';
+import 'package:consumer_app/screens/public_article_view.dart';
 import 'package:flutter/material.dart';
 
 class ArticleFeedPage extends StatelessWidget {
@@ -70,14 +72,37 @@ class ArticleCard extends StatelessWidget {
         // ===================================================================
         // THIS IS WHERE THE NAVIGATION CODE GOES
         // When the user taps this card, we navigate to the detail page.
+        // The logic is now updated to handle different article types.
         // ===================================================================
         onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ArticleDetailPage(article: article),
-            ),
-          );
+          // For 'Misinformation' articles, we show our own deep-dive content.
+          if (article.articleType == 'Misinformation') {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                // We pass the articleId to the view, which will fetch the full
+                // content, including the 'deepDiveContent' HTML.
+                builder: (context) => PublicArticleView(articleId: article.id),
+              ),
+            );
+          }
+          // For all other articles, we open the source URL in our in-app webview.
+          else if (article.sourceUrl != null && article.sourceUrl!.isNotEmpty) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ArticleWebViewScreen(
+                  url: article.sourceUrl!,
+                  title: article.sourceTitle ?? 'Article',
+                ),
+              ),
+            );
+          } else {
+            // Fallback: If there's no URL, show a snackbar.
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('No link available for this article.')),
+            );
+          }
         },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

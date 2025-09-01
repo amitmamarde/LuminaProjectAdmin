@@ -152,6 +152,7 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
         Please provide your response in a single, minified JSON object with two specific keys:
           1. "flashContent": A professional, engaging summary of approximately 60 words. It should be a single paragraph of plain text. Start with a "Why it matters" concept, followed by the core summary, and incorporate key takeaways. Do NOT use any HTML tags (like <p>, <ul>, <li>) or markdown.
           2. "imagePrompt": A vivid, descriptive text prompt for an AI image generator to create a symbolic, non-controversial image representing the topic.
+          3. "extractedImageUrl": The full URL of the primary 'hero' image from the article's content (often from an <og:image> tag). Return an empty string if no suitable image is found.
         Do not include any other text or explanations outside of the single JSON object.`;
 
         responseSchema = {
@@ -159,6 +160,7 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
           properties: {
             flashContent: { type: "STRING" },
             imagePrompt: { type: "STRING" },
+            extractedImageUrl: { type: "STRING" },
           },
           required: ["flashContent", "imagePrompt"],
         };
@@ -181,6 +183,7 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
              - A "Context" section explaining what's missing or how the claim spread (e.g., <h3>Context</h3><p>...</p>).
              Use headings (h2, h3), bold text, paragraphs, and lists. Use shorter paragraphs for readability. Do not use H1 headings.
           3. "imagePrompt": A vivid, descriptive text prompt for an AI image generator to create a symbolic, neutral image representing truth or clarity (e.g., "A clear crystal prism refracting a single beam of light into a rainbow on a dark background.").
+          4. "extractedImageUrl": The full URL of the primary 'hero' image from the article's content (often from an <og:image> tag). Return an empty string if no suitable image is found.
         Do not include any other text or explanations outside of the single JSON object.`;
 
         responseSchema = {
@@ -189,6 +192,7 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
             flashContent: { type: "STRING" },
             deepDiveContent: { type: "STRING" },
             imagePrompt: { type: "STRING" },
+            extractedImageUrl: { type: "STRING" },
           },
           required: ["flashContent", "deepDiveContent", "imagePrompt"],
         };
@@ -221,6 +225,12 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
         // Clear any previous revision notes upon successful regeneration
         adminRevisionNotes: admin.firestore.FieldValue.delete(),
       };
+
+      // If the AI found an image and the article doesn't already have one from the RSS feed, use it.
+      if (generatedText.extractedImageUrl && !data.imageUrl) {
+          updatePayload.imageUrl = generatedText.extractedImageUrl;
+          console.log(`[${articleId}] Added extracted image URL: ${generatedText.extractedImageUrl}`);
+      }
  
       if (articleType === 'Trending Topic' || articleType === 'Positive News' || articleType === 'Research Breakthrough') {
           nextStatus = 'Published';
@@ -1106,7 +1116,7 @@ export const testAllRssFeedsInBatches = onCall({
             await Promise.allSettled([processSingleRssFeedTest(source, reportRef, { limit: articlesPerFeed })]);
             await delay(200); // Add a small 200ms delay between each feed request in the batch.
         }
-        
+
         if (i + batchSize < allRssSources.length) {
             console.log(`[RSS Batch Test] Batch complete. Waiting 10 seconds before next batch.`);
             await delay(10000); // 10-second delay between batches
