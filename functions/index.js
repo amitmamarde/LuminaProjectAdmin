@@ -1071,8 +1071,8 @@ export const testAllRssFeedsInBatches = onCall({
     }
 
     // 2. Get parameters from request, with defaults
-    const batchSize = request.data?.batchSize || 5;
-    const articlesPerFeed = request.data?.articlesPerFeed || 2;
+    const batchSize = request.data?.batchSize || 3;
+    const articlesPerFeed = request.data?.articlesPerFeed || 1;
 
     console.log(`[RSS Batch Test] Starting test run, initiated by ${userDoc.data().email}. Batch size: ${batchSize}, Articles/feed: ${articlesPerFeed}`);
 

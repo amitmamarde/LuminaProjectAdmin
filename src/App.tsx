@@ -662,15 +662,15 @@ const DashboardPage: React.FC = () => {
     };
 
     const handleBatchRssTest = async () => {
-        if (!window.confirm('This will test ALL RSS feeds in batches of 5, fetching 2 articles from each. This will create new draft articles and may take several minutes and incur costs. Continue?')) {
+        if (!window.confirm('This will test ALL RSS feeds in small batches, fetching 1 article from each. This will create new draft articles and may take several minutes and incur costs. Continue?')) {
             return;
         }
         setIsBatchTesting(true);
         setTestFeedback('');
         try {
             const testFunction = httpsCallable(functions, 'testAllRssFeedsInBatches');
-            // These parameters are passed to the cloud function
-            const result = await testFunction({ batchSize: 5, articlesPerFeed: 2 });
+            // These parameters are passed to the cloud function. Reduced for stability.
+            const result = await testFunction({ batchSize: 3, articlesPerFeed: 1 });
             const data = result.data as { success: boolean; message: string; reportId: string };
             setTestFeedback(data.message || 'Batch RSS test completed. Check Firestore for the report.');
         } catch (error: any) {
