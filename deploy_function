@@ -1,0 +1,7 @@
+cd functions && npm install && cd ..
+
+echo "$PWD"
+
+read -p "Press enter to continue"
+
+firebase deploy --only functions

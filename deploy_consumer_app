@@ -1,0 +1,19 @@
+cd consumer_app
+
+echo "$PWD"
+
+read -p "Press enter to continue"
+
+flutter pub get 
+
+read -p "Press enter to continue"
+
+flutter build web
+
+cd ..
+
+echo "$PWD"
+
+read -p "Press enter to continue"
+
+firebase deploy --only hosting
