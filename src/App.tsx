@@ -21,7 +21,6 @@ import {
     updateDoc,
     serverTimestamp,
     onSnapshot,
-    writeBatch,
     Timestamp
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -31,7 +30,7 @@ import ReactQuill from 'react-quill';
 import DOMPurify from 'dompurify';
 
 import { Modal } from './components/Modal';
-import type { UserProfile, Article, ArticleStatus, ArticleType, SuggestedTopic } from './types';
+import type { UserProfile, Article, ArticleStatus, ArticleType } from './types';
 import { ArticleStatus as ArticleStatusEnum } from './types';
 import { auth, db, functions } from './firebase';
 import { saveArticle, deleteArticle } from './services/articleService';
@@ -598,26 +597,6 @@ const DashboardPage: React.FC = () => {
         } finally {
             setIsRequeuing(false);
             setTimeout(() => setFeedback(''), 5000);
-        }
-    };
-
-    const handleTestSource = async () => {
-        if (!window.confirm('This will trigger a test to fetch one article from every source in the registry (~100 sources). This may take several minutes and will incur costs. Continue?')) {
-            return;
-        }
-        setIsTestingSources(true);
-        setTestFeedback('');
-        try {
-            const testFunction = httpsCallable(functions, 'testAllSources');
-            const result = await testFunction({});
-            const data = result.data as { success: boolean; message: string; reportId: string };
-            setTestFeedback(data.message || 'Test completed. Check Firestore for the report.');
-        } catch (error: any) {
-            console.error("Error testing sources:", error);
-            setTestFeedback(`Error: ${error.message || 'Failed to start source test.'}`);
-        } finally {
-            setIsTestingSources(false);
-            setTimeout(() => setTestFeedback(''), 10000);
         }
     };
 
@@ -1217,31 +1196,6 @@ const ArticleEditorPage: React.FC = () => {
         navigate('/articles');
     };
     
-    const generateAndUploadImage = async (): Promise<string | null> => {
-        if (!id || !article.imagePrompt) {
-            setError("Image prompt is missing.");
-            return null;
-        }
-        setIsSaving(true);
-        try {
-            const generateImageFunction = httpsCallable(functions, 'generateImage');
-            const result = await generateImageFunction({ prompt: article.imagePrompt });
-            const imageData = result.data as { success: boolean; imageUrl?: string; error?: string };
-
-            if (!imageData.success || !imageData.imageUrl) {
-                 setError(imageData.error || "Failed to generate image.");
-                 return null;
-            }
-            setArticle(prev => ({ ...prev, imageUrl: imageData.imageUrl }));
-            return imageData.imageUrl;
-        } catch (e: any) {
-            setError(`Image generation failed: ${e.message}`);
-            return null;
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
     const handleRegenerate = async () => {
         if (!id || userData?.role !== 'Admin') return;
         setIsRegenerating(true);
