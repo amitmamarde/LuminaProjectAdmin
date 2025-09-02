@@ -18,7 +18,7 @@ class _ArticleFeedScreenState extends State<ArticleFeedScreen> {
   bool _isLoading = false;
   bool _hasMore = true;
 
-  final ScrollController _pageController = ScrollController();
+  final _pageController = PageController();
 
   @override
   void initState() {

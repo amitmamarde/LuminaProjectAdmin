@@ -510,29 +510,48 @@ function getSuggestionsFromApiResponse(response, context) {
  * @returns {string|null} The URL of the image or null if not found.
  */
 function getImageUrlFromRssItem(item) {
-    // 1. Check for 'media:content' which is common in Media RSS (MRSS)
-    if (item['media:content'] && item['media:content'].$ && item['media:content'].$.url) {
-        return item['media:content'].$.url;
-    }
+  // 1. Check for 'media:content' which is common in Media RSS (MRSS)
+  if (item["media:content"]?.$?.url) {
+    return item["media:content"].$.url;
+  }
 
-    // 2. Check for the standard 'enclosure' tag
-    if (item.enclosure && item.enclosure.url && item.enclosure.type && item.enclosure.type.startsWith('image/')) {
-        return item.enclosure.url;
-    }
+  // 2. Check for the standard 'enclosure' tag with an image type
+  if (item.enclosure?.url && item.enclosure.type?.startsWith("image/")) {
+    return item.enclosure.url;
+  }
 
-    // 3. Check for 'media:thumbnail'
-    if (item['media:thumbnail'] && item['media:thumbnail'].$ && item['media:thumbnail'].$.url) {
-        return item['media:thumbnail'].$.url;
-    }
+  // 3. Check for iTunes image tag (common in podcasts but sometimes used elsewhere)
+  if (item.itunes?.image) {
+    // itunes:image can be a string or an object with an href attribute
+    return typeof item.itunes.image === "string"
+      ? item.itunes.image
+      : item.itunes.image.href;
+  }
 
-    // 4. Fallback: search for the first <img> tag in the content string
-    const content = item.content || item.contentSnippet || item['content:encoded'] || '';
-    const match = content.match(/<img[^>]+src="([^">]+)"/);
-    if (match && match[1]) {
-        return match[1];
-    }
+  // 4. Check for 'media:thumbnail'
+  if (item["media:thumbnail"]?.$?.url) {
+    return item["media:thumbnail"].$.url;
+  }
 
-    return null; // No image found
+  // 5. Check for a top-level 'image' object (less common, but exists)
+  if (item.image && typeof item.image === "object" && item.image.url) {
+    return item.image.url;
+  }
+  // Or a direct string
+  if (item.image && typeof item.image === "string") {
+    return item.image;
+  }
+
+  // 6. Fallback: search for the first <img> tag in the content string with a more robust regex
+  const content =
+    item.content || item.contentSnippet || item["content:encoded"] || "";
+  // This regex handles single or double quotes and is case-insensitive
+  const match = content.match(/<img[^>]+src=['"]([^'"]+)['"]/i);
+  if (match && match[1]) {
+    return match[1];
+  }
+
+  return null; // No image found
 }
 
 /**
