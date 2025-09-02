@@ -22,21 +22,41 @@ class ArticleFeedCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Top 40% placeholder for an image.
+            // Top 35% for an image.
             Container(
               height: MediaQuery.of(context).size.height * 0.35,
               width: double.infinity,
               color: Colors.grey[200],
-              child: Center(
-                child: Text(
-                  'Lumina',
-                  style: GoogleFonts.lato(
-                    fontSize: 48,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black.withOpacity(0.15),
-                  ),
-                ),
-              ),
+              child: (article.imageUrl != null && article.imageUrl!.isNotEmpty)
+                  ? CachedNetworkImage(
+                      imageUrl: article.imageUrl!,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Center(
+                        child: CircularProgressIndicator(
+                          color: theme.accent,
+                        ),
+                      ),
+                      errorWidget: (context, url, error) => Center(
+                        child: Text(
+                          'Lumina',
+                          style: GoogleFonts.lato(
+                            fontSize: 48,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black.withOpacity(0.15),
+                          ),
+                        ),
+                      ),
+                    )
+                  : Center(
+                      child: Text(
+                        'Lumina',
+                        style: GoogleFonts.lato(
+                          fontSize: 48,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black.withOpacity(0.15),
+                        ),
+                      ),
+                    ),
             ),
             // Content section with title and scrollable flash content.
             Expanded(
@@ -47,7 +67,7 @@ class ArticleFeedCard extends StatelessWidget {
                   children: [
                     Text(
                       article.title,
-                      maxLines: 3,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.lato(
                         fontSize: 24,

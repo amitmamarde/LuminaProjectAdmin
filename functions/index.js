@@ -102,12 +102,17 @@ const SUPPORTED_CATEGORIES = [
  * @param {object} data The data of the article.
  * @param {string} geminiApiKey The Gemini API key.
  */
-async function performContentGeneration(articleId, data, geminiApiKey) {
-    console.log(`[${articleId}] Starting content generation for: "${data.title}" of type "${data.articleType}"`);
+async function performContentGeneration(articleId, data, geminiApiKey) {    
+    const originalTitle = data.title;
+    const cleanedTitle = cleanArticleTitle(originalTitle);
+
+    console.log(`[${articleId}] Starting content generation for: "${cleanedTitle}" (Original: "${originalTitle}") of type "${data.articleType}"`);
 
     const genAI = new GoogleGenerativeAI(geminiApiKey);
     const articleRef = db.collection('articles').doc(articleId);
-    let { title, categories, shortDescription, articleType, sourceUrl } = data;
+    // Use the cleaned title for all subsequent operations in this function.
+    let { categories, shortDescription, articleType, sourceUrl } = data;
+    let title = cleanedTitle;
 
     // --- Verify 'Positive News' classification before proceeding ---
     if (articleType === 'Positive News') {
@@ -138,9 +143,10 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
 
       // --- Define prompts and schemas based on Article Type ---
       
-      // For Trending and Positive news, we only generate a summary as we link to the source.
-      if (articleType === 'Trending Topic' || articleType === 'Positive News' || articleType === 'Research Breakthrough') {
-        console.log(`[${articleId}] Generating summary-only content for a '${articleType}' article.`);
+      // For most types, we only generate a summary as we link to the source.
+      // This now includes 'Misinformation' articles that come from a trusted RSS feed (identified by having a sourceUrl).
+      if (articleType === 'Trending Topic' || articleType === 'Positive News' || articleType === 'Research Breakthrough' || (articleType === 'Misinformation' && sourceUrl)) {
+        console.log(`[${articleId}] Generating summary-only content for a '${articleType}' article (Source: ${sourceUrl || 'N/A'}).`);
 
         promptPersona = `You are a helpful summarizer for the "Lumina Content Platform". Your task is to create a flash summary for the topic: "${title}".`;
 
@@ -150,7 +156,7 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
 
         Based on the article content (which you should access if possible) and the provided context, produce a crisp, neutral summary.
         Please provide your response in a single, minified JSON object with two specific keys:
-          1. "flashContent": A professional, engaging summary of approximately 60 words. It should be a single paragraph of plain text. Start with a "Why it matters" concept, followed by the core summary, and incorporate key takeaways. Do NOT use any HTML tags (like <p>, <ul>, <li>) or markdown.
+          1. "flashContent": A professional, engaging summary of approximately 60 words. It should be a single paragraph of plain text that explains the core summary and key takeaways of the article. Do NOT use any HTML tags (like <p>, <ul>, <li>) or markdown.
           2. "imagePrompt": A vivid, descriptive text prompt for an AI image generator to create a symbolic, non-controversial image representing the topic.
           3. "extractedImageUrl": The full URL of the primary 'hero' image from the article's content (often from an <og:image> tag). Return an empty string if no suitable image is found.
         Do not include any other text or explanations outside of the single JSON object.`;
@@ -166,8 +172,9 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
         };
 
       // For Misinformation, we generate a full deep dive.
+      // This now only applies to Misinformation articles that do NOT have a sourceUrl (e.g., manually created).
       } else if (articleType === 'Misinformation') {
-        console.log(`[${articleId}] Generating full deep-dive content for a 'Misinformation' article.`);
+        console.log(`[${articleId}] Generating full deep-dive content for an unsourced 'Misinformation' article.`);
         promptPersona = `You are a neutral, objective fact-checker for the "Lumina Content Platform". Your task is to write a fact-check draft for the topic: "${title}".`;
 
         textPrompt = `${promptPersona}
@@ -219,6 +226,7 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
       // Trending/Positive News are auto-published. Misinformation goes to expert review.
       let nextStatus;
       const updatePayload = {
+        title: cleanedTitle, // Persist the cleaned title to the database.
         articleType: articleType, // Persist the final article type.
         flashContent: generatedText.flashContent,
         imagePrompt: generatedText.imagePrompt,
@@ -232,11 +240,11 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
           console.log(`[${articleId}] Added extracted image URL: ${generatedText.extractedImageUrl}`);
       }
  
-      if (articleType === 'Trending Topic' || articleType === 'Positive News' || articleType === 'Research Breakthrough') {
+      if (articleType === 'Trending Topic' || articleType === 'Positive News' || articleType === 'Research Breakthrough' || (articleType === 'Misinformation' && sourceUrl)) {
           nextStatus = 'Published';
           updatePayload.status = nextStatus;
           updatePayload.publishedAt = admin.firestore.FieldValue.serverTimestamp();
-      } else { // Misinformation
+      } else { // Misinformation (unsourced)
           nextStatus = 'AwaitingExpertReview';
           updatePayload.status = nextStatus;
       }
@@ -526,6 +534,32 @@ function getImageUrlFromRssItem(item) {
 
     return null; // No image found
 }
+
+/**
+ * Cleans and standardizes an article title by removing common prefixes and suffixes.
+ * @param {string} title The original article title.
+ * @returns {string} The cleaned title.
+ */
+function cleanArticleTitle(title) {
+    if (!title || typeof title !== 'string') {
+        return '';
+    }
+
+    let cleanedTitle = title.trim();
+
+    // Rule 1: Handle prefixes ending with a colon.
+    // If the part before the colon is short (e.g., a category or leading phrase), remove it.
+    // A threshold of ~45 characters is a safe heuristic to distinguish prefixes from main clauses.
+    const colonIndex = cleanedTitle.indexOf(':');
+    if (colonIndex > 0 && colonIndex < 45) {
+        cleanedTitle = cleanedTitle.substring(colonIndex + 1).trim();
+    }
+
+    // Rule 2: Remove common call-to-action suffixes like (LISTEN) or (WATCH).
+    cleanedTitle = cleanedTitle.replace(/\s+\(\w+\)$/, '').trim();
+
+    return cleanedTitle;
+}
 /**
  * Processes a single RSS feed to find and create new article drafts.
  * @param {object} source The source object from the registry, including rssUrl.
@@ -586,7 +620,7 @@ async function processRssFeed(source, options = {}) {
             // Create new article draft
             const newArticleRef = db.collection('articles').doc();
             const articleData = {
-                title: item.title || 'Untitled',
+                title: cleanArticleTitle(item.title || 'Untitled'),
                 articleType: articleType,
                 categories: finalCategories, // Use the cleaned and limited categories
                 region: region,

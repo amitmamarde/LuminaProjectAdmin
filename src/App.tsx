@@ -233,10 +233,10 @@ const HomePage: React.FC = () => {
                                    rel="noopener noreferrer"
                                    key={article.id}
                                    className={`block ${theme.base} rounded-lg shadow-md hover:shadow-2xl transition-shadow duration-300 overflow-hidden group`}>
-                                    {article.imageUrl && <img src={article.imageUrl} alt={article.title} className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"/>}
+                                    {article.imageUrl && <img src={article.imageUrl} alt={article.title} className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300" />}
                                     <div className="p-6">
                                         <p className={`text-sm ${theme.accent} font-semibold mb-2`}>{article.categories.join(', ')}</p>
-                                        <h3 className={`text-xl font-bold ${theme.text} mb-3`}>{article.title}</h3>
+                                        <h3 className={`text-xl font-bold ${theme.text} mb-3 h-14 overflow-hidden`}>{article.title}</h3>
                                         <p className={`${theme.textSecondary} text-sm`}>{article.flashContent?.substring(0, 100)}...</p>
                                     </div>
                                 </a>
@@ -324,7 +324,7 @@ const ArticleFeedPage: React.FC = () => {
                         <div className="relative z-10 flex flex-col h-full p-6 md:p-8">
                             <div className="flex-grow" /> {/* Spacer */}
                             <div className="max-w-3xl mx-auto w-full">
-                                <h1 className={`text-3xl md:text-4xl font-extrabold mb-4 ${titleColor}`} style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
+                                <h1 className={`text-3xl md:text-4xl font-extrabold mb-4 ${titleColor} h-18 md:h-20 overflow-hidden`} style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
                                     {article.title}
                                 </h1>
                                 <p className={`text-base md:text-lg mb-8 leading-relaxed max-h-40 overflow-y-auto ${contentColor}`}>
