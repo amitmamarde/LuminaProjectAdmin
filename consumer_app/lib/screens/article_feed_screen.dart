@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:consumer_app/models/article.dart';
-import 'package:consumer_app/screens/article_detail_screen.dart';
-import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:consumer_app/widgets/article_feed_card.dart';
+import 'package:flutter_spinkit/flutter_spinkit.dart';
 
 class ArticleFeedScreen extends StatefulWidget {
   const ArticleFeedScreen({super.key});
@@ -13,61 +12,95 @@ class ArticleFeedScreen extends StatefulWidget {
 }
 
 class _ArticleFeedScreenState extends State<ArticleFeedScreen> {
-  late final Stream<QuerySnapshot> _articlesStream;
+  final int _limit = 20;
+  List<Article> _articles = [];
+  DocumentSnapshot? _lastDocument;
+  bool _isLoading = false;
+  bool _hasMore = true;
+
+  final ScrollController _pageController = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    // Create a stream to listen for published articles, ordered by the newest first.
-    _articlesStream = FirebaseFirestore.instance
+    _fetchArticles();
+
+    // Detect when user scrolls near the end of current list
+    _pageController.addListener(() {
+      if (_pageController.position.pixels >=
+              _pageController.position.maxScrollExtent - 200 &&
+          !_isLoading &&
+          _hasMore) {
+        _fetchArticles();
+      }
+    });
+  }
+
+  Future<void> _fetchArticles() async {
+    if (!_hasMore) return;
+
+    setState(() => _isLoading = true);
+
+    Query query = FirebaseFirestore.instance
         .collection('articles')
         .where('status', isEqualTo: 'Published')
         .orderBy('publishedAt', descending: true)
-        .snapshots();
+        .limit(_limit);
+
+    if (_lastDocument != null) {
+      query = query.startAfterDocument(_lastDocument!);
+    }
+
+    final snapshot = await query.get();
+
+    if (snapshot.docs.isNotEmpty) {
+      _lastDocument = snapshot.docs.last;
+      _articles.addAll(snapshot.docs.map((doc) => Article.fromFirestore(doc)));
+      if (snapshot.docs.length < _limit) _hasMore = false;
+    } else {
+      _hasMore = false;
+    }
+
+    setState(() => _isLoading = false);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_articles.isEmpty && _isLoading) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: SpinKitFadingCube(color: Colors.white, size: 50.0),
+        ),
+      );
+    }
+
+    if (_articles.isEmpty && !_isLoading) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Text(
+            'No articles found.',
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.black,
-      body: StreamBuilder<QuerySnapshot>(
-        stream: _articlesStream,
-        builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
-          if (snapshot.hasError) {
-            return const Center(
-              child: Text(
-                'Something went wrong',
-                style: TextStyle(color: Colors.white),
-              ),
-            );
-          }
-
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            // Show a loading indicator while fetching data
-            return const Center(
-              child: SpinKitFadingCube(color: Colors.white, size: 50.0),
-            );
-          }
-
-          if (snapshot.data == null || snapshot.data!.docs.isEmpty) {
-            return const Center(
-              child: Text(
-                'No articles found.',
-                style: TextStyle(color: Colors.white),
-              ),
-            );
-          }
-
-          final articles = snapshot.data!.docs
-              .map((doc) => Article.fromFirestore(doc))
-              .toList();
-
-          // Use PageView.builder to create a swipeable feed of articles.
-          return PageView.builder(
-            scrollDirection: Axis.vertical,
-            itemCount: articles.length,
-            itemBuilder: (context, index) => ArticleFeedCard(article: articles[index]),
-          );
+      body: PageView.builder(
+        controller: _pageController,
+        scrollDirection: Axis.vertical,
+        itemCount: _articles.length,
+        itemBuilder: (context, index) {
+          return ArticleFeedCard(article: _articles[index]);
         },
       ),
     );
