@@ -143,17 +143,24 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
                 console.log(`[${articleId}] Successfully self-extracted og:image: ${manuallyExtractedImageUrl}`);
             } else {
                 console.log(`[${articleId}] No og:image tag found in the source HTML.`);
+                // Consider logging the entire HTML content here (in a non-production environment)
+                // to help debug why the og:image tag might not be found.  Be careful about
+                // logging potentially sensitive content in a production environment.
             }
         } catch (e) {
             // Specifically check for a timeout error to provide a clearer log message.
             if (e.name === 'AbortError' || e.code === 'ECONNABORTED') {
                  console.warn(`[${articleId}] Request to source URL timed out after 5s. Will proceed without an image.`);
             } else {
-                 // Log other errors for debugging.
-                 console.warn(`[${articleId}] Failed to fetch or parse source URL for image extraction. Will proceed without it. Error: ${e.message}`);
+                // Log other errors for debugging.  Include the full error stack in development.
+                console.warn(`[${articleId}] Failed to fetch or parse source URL for image extraction. Will proceed without it. Error: ${e.message}`); // Keep message for prod
+                // In a development environment only:
+                // console.warn(`[${articleId}] Full error details:`, e);
             }
         }
     }
+
+     //Add a check to see if manuallyExtractedImageUrl is an empty string.
 
     // --- Verify 'Positive News' classification before proceeding ---
     if (articleType === 'Positive News') {
@@ -321,7 +328,10 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
       };
 
       // Use our reliably extracted image URL. This overwrites any lower-quality
-      // image that may have come from the RSS feed.
+        // image that may have come from the RSS feed. Also check if manuallyExtractedImageUrl is an empty string.
+
+      // Ensure that an empty string does not overwrite a valid image URL.
+
       if (manuallyExtractedImageUrl) {
           updatePayload.imageUrl = manuallyExtractedImageUrl;
           console.log(`[${articleId}] Updating article with self-extracted image URL: ${manuallyExtractedImageUrl}`);

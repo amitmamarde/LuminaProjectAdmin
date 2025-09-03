@@ -27,6 +27,10 @@ class ArticleFeedCard extends StatelessWidget {
               height: MediaQuery.of(context).size.height * 0.35,
               width: double.infinity,
               color: Colors.grey[200],
+              // Added key to force refresh cached image when URL is the same
+              key: ValueKey(article.imageUrl),
+              //Explicitly define headers
+
               child: (article.imageUrl != null && article.imageUrl!.isNotEmpty)
                   ? CachedNetworkImage(
                       imageUrl: article.imageUrl!,
@@ -34,6 +38,9 @@ class ArticleFeedCard extends StatelessWidget {
                       placeholder: (context, url) => Center(
                         child: CircularProgressIndicator(
                           color: theme.accent,
+                         ),
+                       headers: {
+                         'Cache-Control': 'no-cache',
                         ),
                       ),
                       errorWidget: (context, url, error) => Center(
