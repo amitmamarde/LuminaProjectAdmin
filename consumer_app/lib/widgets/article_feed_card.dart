@@ -3,6 +3,7 @@ import 'package:consumer_app/models/article.dart'; // Make sure this path is cor
 import 'package:consumer_app/theme/article_themes.dart'; // Import the themes
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:consumer_app/utils/image_proxy.dart'; // Import the new helper
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -33,22 +34,31 @@ class ArticleFeedCard extends StatelessWidget {
 
               child: (article.imageUrl != null && article.imageUrl!.isNotEmpty)
                   ? CachedNetworkImage(
-                      imageUrl: article.imageUrl!,
+                      imageUrl: getProxiedImageUrl(article.imageUrl!),
                       fit: BoxFit.cover,
                       placeholder: (context, url) => Center(
                         child: CircularProgressIndicator(
                           color: theme.accent,
                          ),
+                       ),
                        headers: {
                          'Cache-Control': 'no-cache',
                         ),
                       ),
                       errorWidget: (context, url, error) => Center(
-                        child: Text(
-                          'Lumina',
-                          style: GoogleFonts.lato(
-                            fontSize: 48,
-                            fontWeight: FontWeight.bold,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'Lumina',
+                              style: GoogleFonts.lato(
+                                fontSize: 48,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black.withOpacity(0.15),
+                              ),
+                            ),
+                            Text('Error loading image: $error'), // Display the error message
+                          ],
                             color: Colors.black.withOpacity(0.15),
                           ),
                         ),
@@ -209,9 +219,8 @@ class ArticleFeedCard extends StatelessWidget {
             child: IconButton(
               icon: Icon(Icons.share, color: theme.text),
               onPressed: () {
-                // TODO: Replace with your app's public URL
                 final shareUrl =
-                    'https://your-app-domain.com/#/view/${article.id}';
+                    'https://lumina-summaries.web.app/#/view/${article.id}';
                 Share.share('Read on Lumina: ${article.title}\n$shareUrl');
               },
             ),

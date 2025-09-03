@@ -1,6 +1,6 @@
 // This file uses the modern ES Module syntax and the v2 Cloud Functions API for a successful deployment.
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
-import { onSchedule } from "firebase-functions/v2/scheduler";
+import { onRequest } from "firebase-functions/v2/https";
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import admin from "firebase-admin";
@@ -1323,6 +1323,46 @@ export const generateImage = onCall({
     } catch (error) {
         console.error("Error during image generation:", error);
         throw new HttpsError('internal', 'Failed to generate image.', error.message);
+    }
+});
+
+/**
+ * An HTTP-triggered function that acts as an image proxy to bypass CORS issues.
+ * It fetches an image from a given URL and streams it back to the client.
+ * This prevents browser CORS errors when displaying images from third-party domains
+ * that don't send the correct `Access-Control-Allow-Origin` header.
+ *
+ * Usage: /imageProxy?url=<encoded_image_url>
+ */
+export const imageProxy = onRequest({
+    region: "europe-west1",
+    // Allow all origins to access this function. Your Firebase Hosting security rules
+    // can provide finer-grained control if needed.
+    cors: true,
+}, async (req, res) => {
+    const imageUrl = req.query.url;
+
+    if (!imageUrl || typeof imageUrl !== 'string') {
+        res.status(400).send("Bad Request: Missing or invalid 'url' query parameter.");
+        return;
+    }
+
+    try {
+        const imageResponse = await axios.get(imageUrl, {
+            responseType: 'arraybuffer', // Crucial for handling binary image data
+            headers: { 'User-Agent': 'Lumina-Image-Proxy/1.0 (+https://lumina-summaries.web.app)' }
+        });
+
+        const contentType = imageResponse.headers['content-type'];
+
+        // Set headers to instruct the browser on how to handle the response
+        res.set('Content-Type', contentType);
+        res.set('Cache-Control', 'public, max-age=604800, s-maxage=604800'); // Cache for 7 days
+        res.status(200).send(imageResponse.data);
+
+    } catch (error) {
+        console.error(`[ImageProxy] Failed to fetch image from URL: ${imageUrl}`, error.message);
+        res.status(502).send("Bad Gateway: Could not fetch the requested image.");
     }
 });
 

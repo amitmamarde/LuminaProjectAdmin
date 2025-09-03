@@ -35,7 +35,6 @@ import { ArticleStatus as ArticleStatusEnum } from './types';
 import { auth, db, functions } from './firebase';
 import { saveArticle, deleteArticle } from './services/articleService';
 
-
 // --- App-wide Constants ---
 const CATEGORIES = [
   'Science & Technology', 'Health & Wellness', 'History & Culture', 'Politics & Society',
