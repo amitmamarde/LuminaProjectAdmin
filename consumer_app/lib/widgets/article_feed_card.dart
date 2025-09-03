@@ -70,7 +70,7 @@ class ArticleFeedCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.lato(
-                        fontSize: 24,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
                         color: theme.text, // Use theme's primary text color
                       ),

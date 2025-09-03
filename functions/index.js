@@ -123,10 +123,16 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
         try {
             console.log(`[${articleId}] Fetching source URL to extract og:image: ${sourceUrl}`);
             // Use a common user-agent to avoid being blocked. Timeout after 5s.
+            // Create an AbortController for a 5-second timeout.
+            // This is the modern and correct way to handle timeouts in axios v1.7.0+.
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+
             const response = await axios.get(sourceUrl, {
                 headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LuminaBot/1.0; +https://luminanews.app/bot)' },
-                timeout: 5000
+                signal: controller.signal
             });
+            clearTimeout(timeoutId); // Clear the timeout if the request completes in time.
             const html = response.data;
             const $ = load(html);
             const ogImage = $('meta[property="og:image"]').attr('content');
@@ -139,7 +145,13 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
                 console.log(`[${articleId}] No og:image tag found in the source HTML.`);
             }
         } catch (e) {
-            console.warn(`[${articleId}] Failed to fetch or parse source URL for image extraction. Will proceed without it. Error: ${e.message}`);
+            // Specifically check for a timeout error to provide a clearer log message.
+            if (e.name === 'AbortError' || e.code === 'ECONNABORTED') {
+                 console.warn(`[${articleId}] Request to source URL timed out after 5s. Will proceed without an image.`);
+            } else {
+                 // Log other errors for debugging.
+                 console.warn(`[${articleId}] Failed to fetch or parse source URL for image extraction. Will proceed without it. Error: ${e.message}`);
+            }
         }
     }
 
@@ -167,7 +179,7 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
     try {
       const categoriesText = categories.join(', ');
       const descriptionText = shortDescription ? `The user has also provided this short description for additional context: "${shortDescription}".` : '';
-      const TITLE_LENGTH_LIMIT = 90; // Character limit for a title to fit well on two lines.
+      const TITLE_LENGTH_LIMIT = 70; // Character limit for a title to fit well on two lines.
       const isTitleLong = cleanedTitle.length > TITLE_LENGTH_LIMIT;
 
       let promptPersona, responseSchema, textPrompt;
