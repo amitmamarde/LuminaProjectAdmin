@@ -8,6 +8,8 @@ import { getFunctions } from "firebase-admin/functions";
 import { GoogleGenerativeAI, FunctionDeclarationSchemaType } from "@google/generative-ai";
 import Parser from "rss-parser";
 import SOURCE_REGISTRY from "./source-registry.json" with { type: "json" };
+import axios from "axios";
+import { load } from "cheerio";
 
 // A global system prompt to enforce quality, tone, and sourcing rules across all AI interactions.
 const GLOBAL_SYSTEM_PROMPT = `You are a news curation and fact-check assistant for a quality-first news app.
@@ -113,6 +115,33 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
     // Use the cleaned title for all subsequent operations in this function.
     let { categories, shortDescription, articleType, sourceUrl } = data;
     let title = cleanedTitle;
+    let manuallyExtractedImageUrl = null;
+
+    // --- NEW: Manually extract og:image before calling the AI ---
+    // This is a deterministic and reliable way to get the primary image.
+    if (sourceUrl) {
+        try {
+            console.log(`[${articleId}] Fetching source URL to extract og:image: ${sourceUrl}`);
+            // Use a common user-agent to avoid being blocked. Timeout after 5s.
+            const response = await axios.get(sourceUrl, {
+                headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LuminaBot/1.0; +https://luminanews.app/bot)' },
+                timeout: 5000
+            });
+            const html = response.data;
+            const $ = load(html);
+            const ogImage = $('meta[property="og:image"]').attr('content');
+
+            if (ogImage) {
+                // Resolve the URL in case it's relative (e.g., /images/foo.jpg)
+                manuallyExtractedImageUrl = new URL(ogImage, sourceUrl).href;
+                console.log(`[${articleId}] Successfully self-extracted og:image: ${manuallyExtractedImageUrl}`);
+            } else {
+                console.log(`[${articleId}] No og:image tag found in the source HTML.`);
+            }
+        } catch (e) {
+            console.warn(`[${articleId}] Failed to fetch or parse source URL for image extraction. Will proceed without it. Error: ${e.message}`);
+        }
+    }
 
     // --- Verify 'Positive News' classification before proceeding ---
     if (articleType === 'Positive News') {
@@ -138,6 +167,8 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
     try {
       const categoriesText = categories.join(', ');
       const descriptionText = shortDescription ? `The user has also provided this short description for additional context: "${shortDescription}".` : '';
+      const TITLE_LENGTH_LIMIT = 90; // Character limit for a title to fit well on two lines.
+      const isTitleLong = cleanedTitle.length > TITLE_LENGTH_LIMIT;
 
       let promptPersona, responseSchema, textPrompt;
 
@@ -150,26 +181,43 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
 
         promptPersona = `You are a helpful summarizer for the "Lumina Content Platform". Your task is to create a flash summary for the topic: "${title}".`;
 
+        // --- DYNAMIC PROMPT & SCHEMA GENERATION ---
+        const schemaProperties = {
+            flashContent: { type: "STRING", description: "A professional, engaging summary of approximately 60 words." },
+            imagePrompt: { type: "STRING", description: "A vivid, descriptive text prompt for an AI image generator." },
+        };
+        const requiredProperties = ["flashContent", "imagePrompt"];
+        let titleInstruction = '';
+        let promptKeyInstructions = `
+          1. "flashContent": A professional, engaging summary of approximately 60 words. It should be a single paragraph of plain text that explains the core summary and key takeaways of the article. Do NOT use any HTML tags (like <p>, <ul>, <li>) or markdown.
+          2. "imagePrompt": A vivid, descriptive text prompt for an AI image generator to create a symbolic, non-controversial image representing the topic.`;
+
+        if (isTitleLong) {
+            console.log(`[${articleId}] Title is long (${cleanedTitle.length} chars). Requesting a shorter title during content generation.`);
+            schemaProperties.displayTitle = { type: "STRING", description: `A concise headline under ${TITLE_LENGTH_LIMIT} characters.` };
+            requiredProperties.unshift("displayTitle");
+            titleInstruction = `The original headline is quite long: "${title}".\n\n`;
+            promptKeyInstructions = `
+          1. "displayTitle": A concise, compelling alternative headline that is under ${TITLE_LENGTH_LIMIT} characters while preserving the original meaning and key information.
+          2. "flashContent": A professional, engaging summary of approximately 60 words. It should be a single paragraph of plain text that explains the core summary and key takeaways of the article. Do NOT use any HTML tags (like <p>, <ul>, <li>) or markdown.
+          3. "imagePrompt": A vivid, descriptive text prompt for an AI image generator to create a symbolic, non-controversial image representing the topic.`;
+        }
+
         textPrompt = `${promptPersona}
         The original article is from: ${sourceUrl}.
-        The user has provided this context: "${shortDescription}".
+        ${titleInstruction}The user has provided this context: "${shortDescription}".
 
         Based on the article content (which you should access if possible) and the provided context, produce a crisp, neutral summary.
-        Please provide your response in a single, minified JSON object with two specific keys:
-          1. "flashContent": A professional, engaging summary of approximately 60 words. It should be a single paragraph of plain text that explains the core summary and key takeaways of the article. Do NOT use any HTML tags (like <p>, <ul>, <li>) or markdown.
-          2. "imagePrompt": A vivid, descriptive text prompt for an AI image generator to create a symbolic, non-controversial image representing the topic.
-          3. "extractedImageUrl": The full URL of the primary 'hero' image from the article's content (often from an <og:image> tag). Return an empty string if no suitable image is found.
+        Please provide your response in a single, minified JSON object with the following specific keys:
+        ${promptKeyInstructions}
         Do not include any other text or explanations outside of the single JSON object.`;
 
         responseSchema = {
           type: "OBJECT",
-          properties: {
-            flashContent: { type: "STRING" },
-            imagePrompt: { type: "STRING" },
-            extractedImageUrl: { type: "STRING" },
-          },
-          required: ["flashContent", "imagePrompt"],
+          properties: schemaProperties,
+          required: requiredProperties,
         };
+        // --- END DYNAMIC PROMPT & SCHEMA ---
 
       // For Misinformation, we generate a full deep dive.
       // This now only applies to Misinformation articles that do NOT have a sourceUrl (e.g., manually created).
@@ -177,11 +225,15 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
         console.log(`[${articleId}] Generating full deep-dive content for an unsourced 'Misinformation' article.`);
         promptPersona = `You are a neutral, objective fact-checker for the "Lumina Content Platform". Your task is to write a fact-check draft for the topic: "${title}".`;
 
-        textPrompt = `${promptPersona}
-        ${descriptionText}
-        Your goal is to write a balanced, fully sourced explainer that assesses the claim.
-
-        Please provide your response in a single, minified JSON object with three specific keys:
+        // --- DYNAMIC PROMPT & SCHEMA GENERATION ---
+        const schemaProperties = {
+            flashContent: { type: "STRING" },
+            deepDiveContent: { type: "STRING" },
+            imagePrompt: { type: "STRING" },
+        };
+        const requiredProperties = ["flashContent", "deepDiveContent", "imagePrompt"];
+        let titleInstruction = '';
+        let promptKeyInstructions = `
           1. "flashContent": A concise, factual summary of approximately 60 words that quickly states the verdict and the main reason. This is the "Lumina Flash". It should be plain text without HTML.
           2. "deepDiveContent": A detailed, neutral explanation formatted with clean HTML. It MUST include the following sections:
              - A verdict (e.g., <h2>Verdict: Mostly False</h2>).
@@ -189,19 +241,37 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
              - An "Analysis" section that breaks down the evidence point-by-point (e.g., <h3>Analysis</h3><p>...</p><ul><li>...</li></ul>).
              - A "Context" section explaining what's missing or how the claim spread (e.g., <h3>Context</h3><p>...</p>).
              Use headings (h2, h3), bold text, paragraphs, and lists. Use shorter paragraphs for readability. Do not use H1 headings.
-          3. "imagePrompt": A vivid, descriptive text prompt for an AI image generator to create a symbolic, neutral image representing truth or clarity (e.g., "A clear crystal prism refracting a single beam of light into a rainbow on a dark background.").
-          4. "extractedImageUrl": The full URL of the primary 'hero' image from the article's content (often from an <og:image> tag). Return an empty string if no suitable image is found.
+          3. "imagePrompt": A vivid, descriptive text prompt for an AI image generator to create a symbolic, neutral image representing truth or clarity (e.g., "A clear crystal prism refracting a single beam of light into a rainbow on a dark background.").`;
+
+        if (isTitleLong) {
+            console.log(`[${articleId}] Title is long (${cleanedTitle.length} chars). Requesting a shorter title during content generation.`);
+            schemaProperties.displayTitle = { type: "STRING", description: `A concise headline under ${TITLE_LENGTH_LIMIT} characters.` };
+            requiredProperties.unshift("displayTitle");
+            titleInstruction = `The original headline is quite long: "${title}".\n\n`;
+            promptKeyInstructions = `
+          1. "displayTitle": A concise, compelling alternative headline that is under ${TITLE_LENGTH_LIMIT} characters while preserving the original meaning and key information.
+          2. "flashContent": A concise, factual summary of approximately 60 words that quickly states the verdict and the main reason. This is the "Lumina Flash". It should be plain text without HTML.
+          3. "deepDiveContent": A detailed, neutral explanation formatted with clean HTML. It MUST include the following sections:
+             - A verdict (e.g., <h2>Verdict: Mostly False</h2>).
+             - A "What Was Claimed" section (e.g., <h3>What Was Claimed</h3><p>...</p>).
+             - An "Analysis" section that breaks down the evidence point-by-point (e.g., <h3>Analysis</h3><p>...</p><ul><li>...</li></ul>).
+             - A "Context" section explaining what's missing or how the claim spread (e.g., <h3>Context</h3><p>...</p>).
+             Use headings (h2, h3), bold text, paragraphs, and lists. Use shorter paragraphs for readability. Do not use H1 headings.
+          4. "imagePrompt": A vivid, descriptive text prompt for an AI image generator to create a symbolic, neutral image representing truth or clarity (e.g., "A clear crystal prism refracting a single beam of light into a rainbow on a dark background.").`;
+        }
+
+        textPrompt = `${promptPersona}
+        ${descriptionText}
+        ${titleInstruction}Your goal is to write a balanced, fully sourced explainer that assesses the claim.
+
+        Please provide your response in a single, minified JSON object with the following specific keys:
+        ${promptKeyInstructions}
         Do not include any other text or explanations outside of the single JSON object.`;
 
         responseSchema = {
           type: "OBJECT",
-          properties: {
-            flashContent: { type: "STRING" },
-            deepDiveContent: { type: "STRING" },
-            imagePrompt: { type: "STRING" },
-            extractedImageUrl: { type: "STRING" },
-          },
-          required: ["flashContent", "deepDiveContent", "imagePrompt"],
+          properties: schemaProperties,
+          required: requiredProperties,
         };
       } else {
         throw new Error(`Unsupported article type: ${articleType}`);
@@ -225,8 +295,12 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
       // --- New Status Logic ---
       // Trending/Positive News are auto-published. Misinformation goes to expert review.
       let nextStatus;
+      // If we requested a displayTitle and got one, use it. Otherwise, default to the cleanedTitle.
+      const displayTitle = (isTitleLong && generatedText.displayTitle) ? generatedText.displayTitle : cleanedTitle;
+
       const updatePayload = {
         title: cleanedTitle, // Persist the cleaned title to the database.
+        displayTitle: displayTitle, // Persist the new, shorter (or original) display title.
         articleType: articleType, // Persist the final article type.
         flashContent: generatedText.flashContent,
         imagePrompt: generatedText.imagePrompt,
@@ -234,10 +308,11 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
         adminRevisionNotes: admin.firestore.FieldValue.delete(),
       };
 
-      // If the AI found an image and the article doesn't already have one from the RSS feed, use it.
-      if (generatedText.extractedImageUrl && !data.imageUrl) {
-          updatePayload.imageUrl = generatedText.extractedImageUrl;
-          console.log(`[${articleId}] Added extracted image URL: ${generatedText.extractedImageUrl}`);
+      // Use our reliably extracted image URL. This overwrites any lower-quality
+      // image that may have come from the RSS feed.
+      if (manuallyExtractedImageUrl) {
+          updatePayload.imageUrl = manuallyExtractedImageUrl;
+          console.log(`[${articleId}] Updating article with self-extracted image URL: ${manuallyExtractedImageUrl}`);
       }
  
       if (articleType === 'Trending Topic' || articleType === 'Positive News' || articleType === 'Research Breakthrough' || (articleType === 'Misinformation' && sourceUrl)) {

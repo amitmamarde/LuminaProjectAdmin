@@ -235,8 +235,8 @@ const HomePage: React.FC = () => {
                                    className={`block ${theme.base} rounded-lg shadow-md hover:shadow-2xl transition-shadow duration-300 overflow-hidden group`}>
                                     {article.imageUrl && <img src={article.imageUrl} alt={article.title} className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300" />}
                                     <div className="p-6">
-                                        <p className={`text-sm ${theme.accent} font-semibold mb-2`}>{article.categories.join(', ')}</p>
-                                        <h3 className={`text-xl font-bold ${theme.text} mb-3 h-14 overflow-hidden`}>{article.title}</h3>
+                                        <p className={`text-sm ${theme.accent} font-semibold mb-2`}>{article.categories?.join(', ')}</p>
+                                        <h3 className={`text-xl font-bold ${theme.text} mb-3 h-14 overflow-hidden`}>{article.displayTitle || article.title}</h3>
                                         <p className={`${theme.textSecondary} text-sm`}>{article.flashContent?.substring(0, 100)}...</p>
                                     </div>
                                 </a>
@@ -324,10 +324,10 @@ const ArticleFeedPage: React.FC = () => {
                         <div className="relative z-10 flex flex-col h-full p-6 md:p-8">
                             <div className="flex-grow" /> {/* Spacer */}
                             <div className="max-w-3xl mx-auto w-full">
-                                <h1 className={`text-3xl md:text-4xl font-extrabold mb-4 ${titleColor} h-18 md:h-20 overflow-hidden`} style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
-                                    {article.title}
+                                <h1 className={`text-3xl md:text-4xl font-extrabold mb-4 ${titleColor} line-clamp-2`} style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.7)' }}>
+                                    {article.displayTitle || article.title}
                                 </h1>
-                                <p className={`text-base md:text-lg mb-8 leading-relaxed max-h-40 overflow-y-auto ${contentColor}`}>
+                                <p className={`text-base md:text-lg mb-8 leading-relaxed line-clamp-3 ${contentColor}`}>
                                     {article.flashContent}
                                 </p>
                                 <div className="flex justify-between items-center text-sm">
@@ -397,8 +397,8 @@ const PublicArticleView: React.FC = () => {
              <article className="max-w-4xl mx-auto py-12 px-6">
                 {article.imageUrl && <img src={article.imageUrl} alt={article.title} className="w-full h-auto max-h-96 object-cover rounded-xl mb-8 shadow-lg" />}
                 <div className={`${theme.base} p-8 sm:p-12 rounded-lg shadow-lg`}>
-                    <p className={`${theme.accent} font-bold mb-2`}>{article.categories?.join(', ')}</p>
-                    <h1 className={`text-4xl md:text-5xl font-extrabold ${theme.text} mb-4`}>{article.title}</h1>
+                    <p className={`${theme.accent} font-bold mb-2`}>{article.categories?.join(', ')}</p> 
+                    <h1 className={`text-4xl md:text-5xl font-extrabold ${theme.text} mb-4`}>{article.displayTitle || article.title}</h1>
                     <div className={`${theme.textSecondary} border-b pb-4 mb-6 text-sm`}>
                         Published on {article.publishedAt?.toDate().toLocaleDateString()}
                         {article.expertShowNameToPublic && article.expertDisplayName && ` • Verified by ${article.expertDisplayName}`}

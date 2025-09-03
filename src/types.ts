@@ -25,6 +25,7 @@ export interface UserProfile {
 export interface Article {
   id: string;
   title: string;
+  displayTitle?: string;
   articleType: ArticleType; // New field to categorize content
   categories: string[];
   region?: string;

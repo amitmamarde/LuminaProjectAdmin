@@ -51,7 +51,7 @@ class ArticleDetailScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    article.title,
+                    article.displayTitle ?? article.title,
                     style: GoogleFonts.lato(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -154,8 +154,9 @@ class ArticleDetailScreen extends StatelessWidget {
 
   void _shareArticle(BuildContext context) {
     final String shareUrl = 'https://luminaprojectadmin.netlify.app/#/view/${article.id}';
-    final String shareText = '${article.title}\n\nRead more on Lumina:';
+    final String effectiveTitle = article.displayTitle ?? article.title;
+    final String shareText = '$effectiveTitle\n\nRead more on Lumina:';
 
-    Share.share('$shareText $shareUrl', subject: article.title);
+    Share.share('$shareText $shareUrl', subject: effectiveTitle);
   }
 }

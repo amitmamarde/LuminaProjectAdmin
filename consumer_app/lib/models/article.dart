@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class Article {
   final String id;
   final String title;
+  final String? displayTitle;
   final String articleType;
   final List<String> categories;
   final String? flashContent;
@@ -15,6 +16,7 @@ class Article {
   Article({
     required this.id,
     required this.title,
+    this.displayTitle,
     required this.articleType,
     required this.categories,
     this.flashContent,
@@ -30,6 +32,7 @@ class Article {
     return Article(
       id: doc.id,
       title: data['title'] ?? '',
+      displayTitle: data['displayTitle'],
       articleType: data['articleType'] ?? 'Trending Topic',
       categories: List<String>.from(data['categories'] ?? []),
       flashContent: data['flashContent'],

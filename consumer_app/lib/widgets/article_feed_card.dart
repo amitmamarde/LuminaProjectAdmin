@@ -66,7 +66,7 @@ class ArticleFeedCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      article.title,
+                      article.displayTitle ?? article.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.lato(
