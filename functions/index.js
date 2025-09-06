@@ -1,6 +1,7 @@
 // This file uses the modern ES Module syntax and the v2 Cloud Functions API for a successful deployment.
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { onRequest } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import admin from "firebase-admin";
@@ -98,6 +99,33 @@ const SUPPORTED_CATEGORIES = [
     'Arts, Media & Creativity'];
 
 /**
+ * Finds a source entry in the SOURCE_REGISTRY based on its URL.
+ * @param {string} sourceUrl The URL of the article.
+ * @returns {object|null} The source object from the registry or null if not found.
+ */
+function findSourceInRegistry(sourceUrl) {
+    if (!sourceUrl) return null;
+    try {
+        const url = new URL(sourceUrl);
+        const domainToFind = url.hostname.replace(/^www\./, '');
+
+        for (const pillar in SOURCE_REGISTRY.sources) {
+            for (const region in SOURCE_REGISTRY.sources[pillar]) {
+                if (region === 'notes') continue;
+                const allowlist = SOURCE_REGISTRY.sources[pillar][region].allowlist || [];
+                const foundSource = allowlist.find(source => source.domain === domainToFind);
+                if (foundSource) {
+                    return foundSource;
+                }
+            }
+        }
+        return null; // Not found
+    } catch (e) {
+        console.warn(`Could not parse sourceUrl to find in registry: ${sourceUrl}. Error: ${e.message}`);
+        return null;
+    }
+}
+/**
  * Core logic for generating article content using the Gemini API.
  * This function is designed to be called by other Cloud Functions.
  * @param {string} articleId The ID of the article document.
@@ -160,7 +188,14 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
         }
     }
 
-     //Add a check to see if manuallyExtractedImageUrl is an empty string.
+    // --- Fallback to a source logo from the registry if og:image extraction fails ---
+    if (!manuallyExtractedImageUrl && sourceUrl) {
+        const sourceFromRegistry = findSourceInRegistry(sourceUrl);
+        if (sourceFromRegistry && sourceFromRegistry.logoUrl) {
+            manuallyExtractedImageUrl = sourceFromRegistry.logoUrl;
+            console.log(`[${articleId}] No og:image found. Using fallback logoUrl from registry for ${sourceFromRegistry.domain}: ${manuallyExtractedImageUrl}`);
+        }
+    }
 
     // --- Verify 'Positive News' classification before proceeding ---
     if (articleType === 'Positive News') {
@@ -328,11 +363,9 @@ async function performContentGeneration(articleId, data, geminiApiKey) {
       };
 
       // Use our reliably extracted image URL. This overwrites any lower-quality
-        // image that may have come from the RSS feed. Also check if manuallyExtractedImageUrl is an empty string.
-
-      // Ensure that an empty string does not overwrite a valid image URL.
-
-      if (manuallyExtractedImageUrl) {
+      // image that may have come from the RSS feed.
+      // Ensure that a non-empty, valid URL was extracted.
+      if (manuallyExtractedImageUrl && manuallyExtractedImageUrl.trim() !== '') {
           updatePayload.imageUrl = manuallyExtractedImageUrl;
           console.log(`[${articleId}] Updating article with self-extracted image URL: ${manuallyExtractedImageUrl}`);
       }
@@ -402,17 +435,18 @@ export const generateArticleContent = onDocumentCreated({
 
     try {
       // Enqueue the task for processing by the 'processArticle' worker function.
-      // Using the full resource name is more robust and can prevent "Queue does not exist" errors
-      // that sometimes occur due to IAM propagation delays or resolution issues.
-      // First, update the status to 'Queued' to prevent a race condition where the
-      // worker function could finish before this status update is committed.
-      await snapshot.ref.update({ status: 'Queued' });
-
       const functionName = "projects/lumina-summaries/locations/europe-west1/functions/processArticle";
       const queue = getFunctions().taskQueue(functionName);
+
+      // 1. Enqueue the task first. If this fails, we won't have incorrectly
+      // updated the article status to 'Queued'.
       await queue.enqueue({ articleId: articleId });
 
       console.log(`[${articleId}] Successfully queued for generation.`);
+
+      // 2. Only after the task is successfully enqueued, commit the status
+      // update to Firestore. This prevents the article from getting "stuck".
+      await snapshot.ref.update({ status: 'Queued' });
     } catch (error) {
       console.error(`[${articleId}] Failed to enqueue article for generation:`, error);
       // If enqueueing fails, set a status that allows for manual re-triggering.
@@ -524,18 +558,17 @@ export const requeueAllFailedArticles = onCall(
                 const firestoreBatch = db.batch();
                 chunk.forEach((doc) => {
                     const docRef = articlesRef.doc(doc.id);
-                    firestoreBatch.update(docRef, { status: "Queued", adminRevisionNotes: admin.firestore.FieldValue.delete() });
+                    firestoreBatch.update(docRef, { status: 'Queued', adminRevisionNotes: admin.firestore.FieldValue.delete() });
                 });
 
-                // Enqueue all tasks for the chunk in a single bulk operation.
-                // This is more efficient than enqueueing one by one in a loop.
-                // The v2 SDK handles an array of task objects correctly, creating
-                // one task for each object in the array.
-                // First, commit the Firestore status updates to prevent a race condition.
-                await firestoreBatch.commit();
-
-                // Then, if the status update succeeds, enqueue the tasks.
+                // Enqueue the tasks first. If this fails, we won't have incorrectly
+                // updated the article statuses to 'Queued'.
                 await queue.enqueue(tasksToEnqueue);
+
+                // Only after the tasks are successfully enqueued, commit the status
+                // updates to Firestore. This prevents articles from getting "stuck"
+                // in the 'Queued' state if the enqueue operation fails.
+                await firestoreBatch.commit();
 
                 requeuedCount += chunk.length;
                 console.log(`Successfully enqueued and updated status for ${chunk.length} articles.`);
@@ -1337,7 +1370,8 @@ export const generateImage = onCall({
 export const imageProxy = onRequest({
     region: "europe-west1",
     // Allow all origins to access this function. Your Firebase Hosting security rules
-    // can provide finer-grained control if needed.
+    // can provide finer-grained control if needed. With hosting rewrites, this
+    // function is called from the same origin, so CORS is no longer an issue.
     cors: true,
 }, async (req, res) => {
     const imageUrl = req.query.url;
@@ -1411,9 +1445,13 @@ export const processArticle = onTaskDispatched(
         try {
             await performContentGeneration(articleId, articleData, geminiApiKey);
         } catch (error) {
-            // performContentGeneration already updates the document status on failure.
-            // We log the error here, but we don't re-throw it, as this would cause a retry for a permanent failure.
-            console.error(`[${articleId}] Content generation failed for queued task. The article has been marked for revision. Error:`, error.message);
+            // The 'performContentGeneration' function already updates the article status to 'GenerationFailed'.
+            // We log the error here, but it is CRUCIAL to re-throw it.
+            // Re-throwing the error signals to Cloud Tasks that the execution failed. This will
+            // trigger the retry policy defined in the function's configuration, which is
+            // essential for recovering from transient errors like API rate limits.
+            console.error(`[${articleId}] Task failed, will attempt retry. Error:`, error.message);
+            throw error;
         }
     }
 );

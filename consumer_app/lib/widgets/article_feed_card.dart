@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:consumer_app/models/article.dart'; // Make sure this path is correct for your Article model
 import 'package:consumer_app/theme/article_themes.dart'; // Import the themes
 import 'package:google_fonts/google_fonts.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:consumer_app/utils/image_proxy.dart'; // Import the new helper
+import 'package:cached_network_image/cached_network_image.dart'; // Import the new helper
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -16,6 +15,14 @@ class ArticleFeedCard extends StatelessWidget {
   Widget build(BuildContext context) {
     // Determine the theme based on the article type, with a fallback to the default.
     final theme = articleTypeThemes[article.articleType] ?? defaultTheme;
+
+    // Build the proxied image URL.
+    // Using a relative path makes the request same-origin on the web, avoiding CORS.
+    String? proxiedImageUrl;
+    if (article.imageUrl != null && article.imageUrl!.isNotEmpty) {
+      final encodedUrl = Uri.encodeComponent(article.imageUrl!);
+      proxiedImageUrl = '/imageProxy?url=$encodedUrl';
+    }
 
     return Container(
       color: theme.base, // Use the theme's base color for the background
@@ -31,36 +38,36 @@ class ArticleFeedCard extends StatelessWidget {
               // Added key to force refresh cached image when URL is the same
               key: ValueKey(article.imageUrl),
               //Explicitly define headers
-
-              child: (article.imageUrl != null && article.imageUrl!.isNotEmpty)
+              
+              child: (proxiedImageUrl != null)
                   ? CachedNetworkImage(
-                      imageUrl: getProxiedImageUrl(article.imageUrl!),
+                      imageUrl: proxiedImageUrl,
                       fit: BoxFit.cover,
                       placeholder: (context, url) => Center(
                         child: CircularProgressIndicator(
                           color: theme.accent,
                          ),
-                       ),
-                       headers: {
-                         'Cache-Control': 'no-cache',
-                        ),
                       ),
                       errorWidget: (context, url, error) => Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(
-                              'Lumina',
-                              style: GoogleFonts.lato(
-                                fontSize: 48,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black.withOpacity(0.15),
+                            Text('Lumina',
+                                style: GoogleFonts.lato(
+                                  fontSize: 48,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black.withOpacity(0.15),
+                                )),
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16.0),
+                              child: Text(
+                                'Image could not be loaded.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: theme.textSecondary),
                               ),
-                            ),
-                            Text('Error loading image: $error'), // Display the error message
+                            )
                           ],
-                            color: Colors.black.withOpacity(0.15),
-                          ),
                         ),
                       ),
                     )

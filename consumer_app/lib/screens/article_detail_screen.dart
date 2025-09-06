@@ -139,8 +139,9 @@ class ArticleDetailScreen extends StatelessWidget {
   void _launchAction(BuildContext context) {
     final bool hasDeepDive = article.articleType == 'Misinformation';
     // For Misinformation, link to the web deep-dive. Otherwise, link to the original source.
+    // The URL should point to the consumer web app, not the admin panel.
     final String urlToLaunch = hasDeepDive
-        ? 'https://luminaprojectadmin.netlify.app/#/view/${article.id}'
+        ? 'https://lumina-summaries.web.app/#/view/${article.id}'
         : article.sourceUrl ?? '';
 
     if (urlToLaunch.isNotEmpty) {
@@ -153,7 +154,8 @@ class ArticleDetailScreen extends StatelessWidget {
   }
 
   void _shareArticle(BuildContext context) {
-    final String shareUrl = 'https://luminaprojectadmin.netlify.app/#/view/${article.id}';
+    // The URL must point to the consumer web app.
+    final String shareUrl = 'https://lumina-summaries.web.app/#/view/${article.id}';
     final String effectiveTitle = article.displayTitle ?? article.title;
     final String shareText = '$effectiveTitle\n\nRead more on Lumina:';
 
