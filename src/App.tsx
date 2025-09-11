@@ -898,7 +898,7 @@ const ArticleListPage: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-brand-text-secondary mb-1">Filter by Status</label>
-                            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-primary">
+                            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as ArticleStatus | 'all')} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-primary">
                                 <option value="all">All Statuses</option>
                                 {Object.values(ArticleStatusEnum).map(status => (
                                     <option key={status} value={status}>{status.replace(/([A-Z])/g, ' $1').trim()}</option>
@@ -907,7 +907,7 @@ const ArticleListPage: React.FC = () => {
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-brand-text-secondary mb-1">Filter by Type</label>
-                            <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-primary">
+                            <select value={filterType} onChange={e => setFilterType(e.target.value as ArticleType | 'all')} className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-primary">
                                 <option value="all">All Types</option>
                                 {ARTICLE_TYPES.map(type => (
                                     <option key={type} value={type}>{type}</option>
