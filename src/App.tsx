@@ -972,8 +972,10 @@ const ArticleListPage: React.FC = () => {
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Short Description</th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Flash Content</th>
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created On</th>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Training Vote</th>
+                                        <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Training Vote</th>
                                         <th scope="col" className="relative px-6 py-3"><span className="sr-only">Edit</span></th>
                                     </tr>
                                 </thead>
@@ -986,13 +988,15 @@ const ArticleListPage: React.FC = () => {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{article.articleType}</td>
                                             <td className="px-6 py-4 whitespace-nowrap"><Badge status={article.status} /></td>
+                                            <td className="px-6 py-4 text-sm text-gray-500 break-words">{article.shortDescription}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-500 break-words">{article.flashContent}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{article.createdAt.toDate().toLocaleDateString()}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
+                                            <td className="px-6 py-4 whitespace-nowrap text-center">
                                                 <div className="flex items-center gap-2">
                                                     <button onClick={() => handleVote(article, 'up')} className="p-2 rounded-full hover:bg-green-100 text-green-600" title="Good article, generate this">
                                                         { votedArticles.has(article.id) ? <span className="text-gray-400">Voted Up</span> : <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.562 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z" /></svg> }
                                                     </button>
-                                                    <button onClick={() => handleVote(article, 'down')} className="p-2 rounded-full hover:bg-red-100 text-red-600" title="Bad article, skip this">
+                                                    <button onClick={() => handleVote(article, 'down')} className="p-2 rounded-full hover:bg-red-100 text-red-600" title="Bad article, skip this" >
                                                         { votedArticles.has(article.id) ? <span className="text-gray-400">Voted Down</span> : <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M18 9.5a1.5 1.5 0 11-3 0v-6a1.5 1.5 0 013 0v6zM14 9.667v-5.43a2 2 0 00-1.106-1.79l-.05-.025A4 4 0 0011.057 2H5.642a2 2 0 00-1.962 1.608l-1.2 6A2 2 0 004.438 12H8v4a2 2 0 002 2 1 1 0 001-1v-.667a4 4 0 01.8-2.4l1.2-2.4a4 4 0 00.8-2.4z" /></svg> }
                                                     </button>
                                                 </div>
