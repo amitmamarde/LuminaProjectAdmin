@@ -891,7 +891,7 @@ const ArticleListPage: React.FC = () => {
     return (
         <div className="bg-brand-background min-h-screen">
             <Header />
-            <main className="container mx-auto p-6">
+            <main className="p-6">
                 <h1 className="text-3xl font-bold text-brand-text-primary mb-6">Manage All Articles</h1>
 
                 <div className="bg-brand-surface p-4 rounded-lg shadow-md mb-6">
