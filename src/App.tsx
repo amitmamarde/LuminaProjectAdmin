@@ -815,7 +815,7 @@ const UserProfilePage: React.FC = () => {
 const ArticleListPage: React.FC = () => {
     const [articles, setArticles] = useState<Article[]>([]);
     const [loading, setLoading] = useState(true);
-    const [filterStatus, setFilterStatus] = useState(ArticleStatusEnum.Draft); // Default to Drafts for training
+    const [filterStatus, setFilterStatus] = useState<ArticleStatus | 'all'>(ArticleStatusEnum.Draft); // Default to Drafts for training, allow 'all'
     const [filterType, setFilterType] = useState('all');
     const { user } = useAuth();
 
