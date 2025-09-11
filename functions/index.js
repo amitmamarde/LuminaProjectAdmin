@@ -717,7 +717,7 @@ function cleanArticleTitle(title) {
  * @param {string} [options.initialStatus='Draft'] - The status to set for new articles.
  */
 async function processRssFeed(source, options = {}) {
-    const { initialStatus = 'Draft', limit = 5 } = options;
+    const { initialStatus = 'Draft', limit = 5 } = options; // Reverted to 5 to gather more training data
     const { rssUrl, pillar, region, domain } = source;
     console.log(`[RSS] Processing feed for ${domain} in ${region}`);
 
@@ -729,7 +729,7 @@ async function processRssFeed(source, options = {}) {
         }
 
         let newArticleCount = 0;
-        // Limit to the 5 most recent articles from the feed to avoid large writes
+        // Limit to the most recent articles from the feed to avoid large writes.
         const recentItems = feed.items.slice(0, limit);
 
         for (const item of recentItems) {
@@ -766,6 +766,9 @@ async function processRssFeed(source, options = {}) {
             // Attempt to get the image URL from the RSS item
             const imageUrl = getImageUrlFromRssItem(item);
 
+            // Find the source in the registry to get the logo URL for fallback.
+            const sourceFromRegistry = findSourceInRegistry(sourceUrl);
+
             // Create new article draft
             const newArticleRef = db.collection('articles').doc();
             const articleData = {
@@ -781,6 +784,7 @@ async function processRssFeed(source, options = {}) {
                 sourceUrl: sourceUrl,
                 sourceTitle: source.sourceName || feed.title || domain,
                 imageUrl: imageUrl, // Add the extracted image URL
+                sourceLogoUrl: sourceFromRegistry?.logoUrl || null, // Add the source logo for client-side fallback
                 discoveryMethod: 'RSS',
             };
 
@@ -1414,6 +1418,9 @@ export const processArticle = onTaskDispatched(
             // This is the key for rate-limiting. It ensures only one article is
             // generated at a time, respecting the Gemini API limits.
             maxConcurrentDispatches: 1,
+            // To stay under the 15 RPM free tier limit, we dispatch one task
+            // every 10 seconds (6 per minute). 1/10 = 0.1 dispatches/sec.
+            maxDispatchesPerSecond: 0.1,
         }
     },
     async (req) => {

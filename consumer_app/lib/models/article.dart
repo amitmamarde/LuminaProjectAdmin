@@ -11,6 +11,7 @@ class Article {
   final String? imageUrl;
   final String? sourceUrl;
   final String? sourceTitle;
+  final String? sourceLogoUrl;
   final Timestamp? publishedAt;
 
   Article({
@@ -24,6 +25,7 @@ class Article {
     this.imageUrl,
     this.sourceUrl,
     this.sourceTitle,
+    this.sourceLogoUrl,
     this.publishedAt,
   });
 
@@ -40,6 +42,7 @@ class Article {
       imageUrl: data['imageUrl'],
       sourceUrl: data['sourceUrl'],
       sourceTitle: data['sourceTitle'],
+      sourceLogoUrl: data['sourceLogoUrl'],
       publishedAt: data['publishedAt'],
     );
   }

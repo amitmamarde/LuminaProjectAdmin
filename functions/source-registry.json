@@ -4,159 +4,524 @@
     "positive_news": {
       "global": {
         "allowlist": [
-          { "domain": "positive.news", "rssUrl": "https://www.positive.news/feed/", "sourceName": "Positive News" },
-          { "domain": "goodnewsnetwork.org", "rssUrl": "https://www.goodnewsnetwork.org/feed/", "sourceName": "Good News Network" },
-          { "domain": "optimistdaily.com", "rssUrl": "https://www.optimistdaily.com/feed/", "sourceName": "The Optimist Daily" },
-          { "domain": "goodgoodgood.co", "rssUrl": "https://www.goodgoodgood.co/rss", "sourceName": "Good Good Good" },
-          { "domain": "reasonstobecheerful.world", "rssUrl": "https://reasonstobecheerful.world/feed/", "sourceName": "Reasons to be Cheerful" },
-          { "domain": "yesmagazine.org", "rssUrl": "https://www.yesmagazine.org/feed/", "sourceName": "YES! Magazine" },
-          { "domain": "goodblacknews.org", "rssUrl": "https://goodblacknews.org/feed/", "sourceName": "Good Black News" },
-          { "domain": "inspiremore.com", "rssUrl": "https://www.inspiremore.com/feed/", "sourceName": "InspireMore" },
-          { "domain": "huffpost.com", "rssUrl": "https://www.huffpost.com/section/good-news/feed", "sourceName": "HuffPost Good News" }
+          {
+            "domain": "positive.news",
+            "rssUrl": "https://www.positive.news/feed/",
+            "sourceName": "Positive News",
+            "logoUrl": "https://www.positive.news/wp-content/uploads/2018/08/cropped-P.N_Icon_Navy-200x200.png"
+          },
+          {
+            "domain": "goodnewsnetwork.org",
+            "rssUrl": "https://www.goodnewsnetwork.org/feed/",
+            "sourceName": "Good News Network",
+            "logoUrl": "https://www.goodnewsnetwork.org/wp-content/uploads/2021/01/cropped-GNN-Logo-Circles-2017-1-180x180.png"
+          },
+          {
+            "domain": "optimistdaily.com",
+            "rssUrl": "https://www.optimistdaily.com/feed/",
+            "sourceName": "The Optimist Daily",
+            "logoUrl": "https://www.optimistdaily.com/wp-content/themes/magazine-pro/images/favicon.ico"
+          },
+          {
+            "domain": "goodgoodgood.co",
+            "rssUrl": "https://www.goodgoodgood.co/rss",
+            "sourceName": "Good Good Good",
+            "logoUrl": "https://cdn.prod.website-files.com/5f60fb7c410ff4ad7027e270/60d4db9d08626d68f55a0e27_webclip.png"
+          },
+          {
+            "domain": "reasonstobecheerful.world",
+            "rssUrl": "https://reasonstobecheerful.world/feed/",
+            "sourceName": "Reasons to be Cheerful",
+            "logoUrl": "https://reasonstobecheerful.world/wp-content/uploads/2019/05/logo.png"
+          },
+          {
+            "domain": "yesmagazine.org",
+            "rssUrl": "https://www.yesmagazine.org/feed/",
+            "sourceName": "YES! Magazine",
+            "logoUrl": "https://yesmagazine.org/favicon.ico"
+          },
+          {
+            "domain": "goodblacknews.org",
+            "rssUrl": "https://goodblacknews.org/feed/",
+            "sourceName": "Good Black News",
+            "logoUrl": "https://goodblacknews.org/favicon.ico"
+          },
+          {
+            "domain": "inspiremore.com",
+            "rssUrl": "https://www.inspiremore.com/feed/",
+            "sourceName": "InspireMore",
+            "logoUrl": "https://www.inspiremore.com/wp-content/themes/inspiremore2020/assets/images/favicon/apple-touch-icon.png?v=2.0"
+          },
+          {
+            "domain": "huffpost.com",
+            "rssUrl": "https://www.huffpost.com/section/good-news/feed",
+            "sourceName": "HuffPost Good News",
+            "logoUrl": "https://huffpost.com/static-assets/cambria/app/favicon-new.ico"
+          }
         ]
       },
       "india": {
         "allowlist": [
-          { "domain": "thebetterindia.com", "rssUrl": "https://www.thebetterindia.com/feed/", "sourceName": "The Better India" },
-          { "domain": "indianexpress.com", "rssUrl": "https://indianexpress.com/section/good-news/feed/", "sourceName": "Indian Express" },
-          { "domain": "timesofindia.indiatimes.com", "rssUrl": "https://timesofindia.indiatimes.com/rssfeeds/3942753.cms", "sourceName": "Times of India" }
+          {
+            "domain": "thebetterindia.com",
+            "rssUrl": "https://www.thebetterindia.com/feed/",
+            "sourceName": "The Better India",
+            "logoUrl": "https://en-media.thebetterindia.com/uploads/2019/10/cropped-tb-favicon-new-180x180.png"
+          },
+          {
+            "domain": "indianexpress.com",
+            "rssUrl": "https://indianexpress.com/section/good-news/feed/",
+            "sourceName": "Indian Express",
+            "logoUrl": "https://indianexpress.com/favicon.ico"
+          },
+          {
+            "domain": "timesofindia.indiatimes.com",
+            "rssUrl": "https://timesofindia.indiatimes.com/rssfeeds/3942753.cms",
+            "sourceName": "Times of India",
+            "logoUrl": "https://m.timesofindia.com/touch-icon-iphone-precomposed.png"
+          }
         ]
       },
       "europe": {
         "allowlist": [
-          { "domain": "positive.news" },
-          { "domain": "euronews.com", "rssUrl": "https://www.euronews.com/rss?format=mrss&level=vertical&name=next", "sourceName": "Euronews" },
-          { "domain": "theguardian.com", "rssUrl": "https://www.theguardian.com/world/series/the-upside/rss", "sourceName": "The Guardian Upside" }
+          {
+            "domain": "positive.news",
+            "logoUrl": "https://www.positive.news/wp-content/uploads/2018/08/cropped-P.N_Icon_Navy-200x200.png"
+          },
+          {
+            "domain": "euronews.com",
+            "rssUrl": "https://www.euronews.com/rss?format=mrss&level=vertical&name=next",
+            "sourceName": "Euronews",
+            "logoUrl": "https://euronews.com/apple-touch-icon.png"
+          },
+          {
+            "domain": "theguardian.com",
+            "rssUrl": "https://www.theguardian.com/world/series/the-upside/rss",
+            "sourceName": "The Guardian Upside",
+            "logoUrl": "https://assets.guim.co.uk/static/frontend/icons/homescreen/apple-touch-icon.svg"
+          }
         ]
       },
       "usa": {
         "allowlist": [
-          { "domain": "sunnyskyz.com", "rssUrl": "https://feeds.feedburner.com/SunnySkyz", "sourceName": "Sunny Skyz" },
-          { "domain": "today.com", "rssUrl": "https://www.today.com/news/good-news/rss", "sourceName": "TODAY" },
-          { "domain": "usatoday.com", "rssUrl": "http://rssfeeds.usatoday.com/usatoday-newstopstories", "sourceName": "USA TODAY" }
+          {
+            "domain": "sunnyskyz.com",
+            "rssUrl": "https://feeds.feedburner.com/SunnySkyz",
+            "sourceName": "Sunny Skyz",
+            "logoUrl": "https://sunnyskyz.com/favicon.ico"
+          },
+          {
+            "domain": "today.com",
+            "rssUrl": "https://www.today.com/news/good-news/rss",
+            "sourceName": "TODAY",
+            "logoUrl": "https://nodeassets.nbcnews.com/cdnassets/projects/ramen/favicon/today/all-other-sizes-PNG.ico/apple-icon.png"
+          },
+          {
+            "domain": "usatoday.com",
+            "rssUrl": "http://rssfeeds.usatoday.com/usatoday-newstopstories",
+            "sourceName": "USA TODAY",
+            "logoUrl": "https://www.gannett-cdn.com/gannett-web/properties/usatoday/logos-and-branding/logo-icon.png"
+          }
         ]
       }
     },
     "research_breakthroughs": {
       "global": {
         "allowlist": [
-          { "domain": "futurity.org", "rssUrl": "https://www.futurity.org/feed/", "sourceName": "Futurity" },
-          { "domain": "theconversation.com", "rssUrl": "https://theconversation.com/us/articles.atom", "sourceName": "The Conversation" },
-          { "domain": "sciencedaily.com", "rssUrl": "https://www.sciencedaily.com/rss/all.xml", "sourceName": "ScienceDaily" },
-          { "domain": "space.com", "rssUrl": "https://www.space.com/feeds/all", "sourceName": "Space.com" },
-          { "domain": "sciencex.com", "rssUrl": "https://phys.org/rss-feed/", "sourceName": "Phys.org" },
-          { "domain": "nasa.gov", "rssUrl": "https://www.nasa.gov/rss/dyn/breaking_news.rss", "sourceName": "NASA" },
-          { "domain": "esa.int", "rssUrl": "https://www.esa.int/feeds/esa_top_news.rss", "sourceName": "ESA" },
-          { "domain": "nature.com", "rssUrl": "https://www.nature.com/nature.rss", "sourceName": "Nature" },
-          { "domain": "science.org", "rssUrl": "https://www.science.org/rss/news_current.xml", "sourceName": "Science Magazine", "logoUrl": "https://www.science.org/apple-touch-icon.png" },
-          { "domain": "arxiv.org" },
-          { "domain": "medrxiv.org" },
-          { "domain": "biorxiv.org" }
+          {
+            "domain": "futurity.org",
+            "rssUrl": "https://www.futurity.org/feed/",
+            "sourceName": "Futurity",
+            "logoUrl": "https://www.futurity.org/wp/wp-content/uploads/2018/08/futurity_ico.png"
+          },
+          {
+            "domain": "theconversation.com",
+            "rssUrl": "https://theconversation.com/us/articles.atom",
+            "sourceName": "The Conversation",
+            "logoUrl": "https://images.theconversation.com/files/581997/original/9275d5c0-7dd5-4ddf-b50b-98d537e016f4.png"
+          },
+          {
+            "domain": "sciencedaily.com",
+            "rssUrl": "https://www.sciencedaily.com/rss/all.xml",
+            "sourceName": "ScienceDaily",
+            "logoUrl": "https://www.sciencedaily.com/images/scidaily-icon.png"
+          },
+          {
+            "domain": "space.com",
+            "rssUrl": "https://www.space.com/feeds/all",
+            "sourceName": "Space.com",
+            "logoUrl": "https://vanilla.futurecdn.net/space/1386171/apple-touch-icon.png"
+          },
+          {
+            "domain": "sciencex.com",
+            "rssUrl": "https://phys.org/rss-feed/",
+            "sourceName": "Phys.org",
+            "logoUrl": "https://scx0.b-cdn.net/tmpl/v3/img/favicons/apple-touch-icon.png"
+          },
+          {
+            "domain": "nasa.gov",
+            "rssUrl": "https://www.nasa.gov/rss/dyn/breaking_news.rss",
+            "sourceName": "NASA",
+            "logoUrl": "https://www.nasa.gov/wp-content/plugins/nasa-hds-core-setup/assets/favicons/apple-touch-icon-57x57.png"
+          },
+          {
+            "domain": "esa.int",
+            "rssUrl": "https://www.esa.int/feeds/esa_top_news.rss",
+            "sourceName": "ESA",
+            "logoUrl": "https://esa.int/favicon.ico"
+          },
+          {
+            "domain": "nature.com",
+            "rssUrl": "https://www.nature.com/nature.rss",
+            "sourceName": "Nature",
+            "logoUrl": "https://nature.com/static/images/favicons/nature/apple-touch-icon-f39cb19454.png"
+          },
+          {
+            "domain": "science.org",
+            "rssUrl": "https://www.science.org/rss/news_current.xml",
+            "sourceName": "Science Magazine",
+            "logoUrl": "https://www.science.org/apple-touch-icon.png"
+          },
+          {
+            "domain": "arxiv.org",
+            "logoUrl": "https://arxiv.org/static/browse/0.3.4/images/icons/apple-touch-icon.png"
+          },
+          {
+            "domain": "medrxiv.org",
+            "logoUrl": "https://www.medrxiv.org/sites/default/files/images/favicon.ico"
+          },
+          {
+            "domain": "biorxiv.org",
+            "logoUrl": "https://biorxiv.org/favicon.ico"
+          }
         ],
         "notes": "Includes official feeds (NASA, ESA, etc.) and top science news sites (ScienceDaily, Space.com, etc.). Preprint servers (arXiv, medRxiv, bioRxiv) are included with disclaimers; preference given to peer-reviewed follow-ups."
       },
       "india": {
         "allowlist": [
-          { "domain": "isro.gov.in" },
-          { "domain": "dst.gov.in" },
-          { "domain": "dbtindia.gov.in" },
-          { "domain": "icmr.gov.in" },
-          { "domain": "iitm.ac.in" },
-          { "domain": "iitb.ac.in" },
-          { "domain": "iitd.ac.in" },
-          { "domain": "iisc.ac.in" },
-          { "domain": "csir.res.in" }
+          {
+            "domain": "isro.gov.in",
+            "logoUrl": "https://isro.gov.in/favicon.ico"
+          },
+          {
+            "domain": "dst.gov.in",
+            "logoUrl": "https://dst.gov.in/sites/default/files/favicon.ico"
+          },
+          {
+            "domain": "dbtindia.gov.in",
+            "logoUrl": "https://dbtindia.gov.in/sites/all/themes/unee/favicon.ico"
+          },
+          {
+            "domain": "icmr.gov.in",
+            "logoUrl": "https://www.icmr.gov.in/icmrobject/static/icmr/dist/favicon/apple-icon-57x57.png"
+          },
+          {
+            "domain": "iitm.ac.in",
+            "logoUrl": "https://iitm.ac.in/favicon.ico"
+          },
+          {
+            "domain": "iitb.ac.in",
+            "logoUrl": "https://iitb.ac.in/favicon.ico"
+          },
+          {
+            "domain": "iitd.ac.in",
+            "logoUrl": "https://iitd.ac.in/favicon.ico"
+          },
+          {
+            "domain": "iisc.ac.in",
+            "logoUrl": "https://iisc.ac.in/wp-content/themes/iisc/images/favicon/apple-icon-57x57.png"
+          },
+          {
+            "domain": "csir.res.in",
+            "logoUrl": "https://csir.res.in/favicon.ico"
+          }
         ]
       },
       "europe": {
         "allowlist": [
-          { "domain": "ec.europa.eu" },
-          { "domain": "erc.europa.eu" },
-          { "domain": "ukri.org" },
-          { "domain": "cnrs.fr" },
-          { "domain": "helmholtz.de" },
-          { "domain": "ox.ac.uk" },
-          { "domain": "cam.ac.uk" },
-          { "domain": "ethz.ch" },
-          { "domain": "imperial.ac.uk" }
+          {
+            "domain": "ec.europa.eu",
+            "logoUrl": "https://ec.europa.eu/themes/contrib/oe_theme/images/favicons/ec/favicon.png"
+          },
+          {
+            "domain": "erc.europa.eu",
+            "logoUrl": "https://erc.europa.eu/themes/custom/erc_theme/ERC_FAVICON.png"
+          },
+          {
+            "domain": "ukri.org",
+            "logoUrl": "https://www.ukri.org/wp-content/themes/ukri/assets/img/apple-icon-120x120.png"
+          },
+          {
+            "domain": "cnrs.fr",
+            "logoUrl": "https://cnrs.fr/themes/custom/cnrs/favicon.ico"
+          },
+          {
+            "domain": "helmholtz.de",
+            "logoUrl": "https://helmholtz.de/typo3conf/ext/dreipc_hgf/Resources/Public/Frontend/Build/assets/icons/apple-touch-icon/icon-120x120.png"
+          },
+          {
+            "domain": "ox.ac.uk",
+            "logoUrl": "https://www.ox.ac.uk/sites/default/themes/custom/oxweb/apple-touch-icon-114x114.png"
+          },
+          {
+            "domain": "cam.ac.uk",
+            "logoUrl": "https://www.cam.ac.uk/sites/all/themes/fresh/favicon.ico"
+          },
+          {
+            "domain": "ethz.ch",
+            "logoUrl": "https://ethz.ch/etc/designs/ethz/img/icons/ETH-APP-Icons-Theme-white/192-xxxhpdi.png"
+          },
+          {
+            "domain": "imperial.ac.uk",
+            "logoUrl": "https://imperial.ac.uk/assets/website/images/favicon/favicon-120.png"
+          }
         ]
       },
       "usa": {
         "allowlist": [
-          { "domain": "news.mit.edu", "rssUrl": "https://news.mit.edu/rss/feed", "sourceName": "MIT News" },
-          { "domain": "news.stanford.edu", "rssUrl": "https://news.stanford.edu/feed/", "sourceName": "Stanford News" },
-          { "domain": "news.harvard.edu", "rssUrl": "https://news.harvard.edu/gazette/feed/", "sourceName": "The Harvard Gazette", "logoUrl": "https://news.harvard.edu/gazette/wp-content/uploads/2021/01/cropped-gazette-icon-1-270x270.png" },
-          { "domain": "caltech.edu", "rssUrl": "https://www.caltech.edu/about/news/rss", "sourceName": "Caltech" }
+          {
+            "domain": "news.mit.edu",
+            "rssUrl": "https://news.mit.edu/rss/feed",
+            "sourceName": "MIT News",
+            "logoUrl": "https://news.mit.edu/themes/mit/assets/img/favicon/apple-touch-icon.png"
+          },
+          {
+            "domain": "news.stanford.edu",
+            "rssUrl": "https://news.stanford.edu/feed/",
+            "sourceName": "Stanford News",
+            "logoUrl": "https://news.stanford.edu/__data/assets/image/0026/9359/apple-touch-icon-57x57.png"
+          },
+          {
+            "domain": "news.harvard.edu",
+            "rssUrl": "https://news.harvard.edu/gazette/feed/",
+            "sourceName": "The Harvard Gazette",
+            "logoUrl": "https://news.harvard.edu/gazette/wp-content/uploads/2021/01/cropped-gazette-icon-1-270x270.png"
+          },
+          {
+            "domain": "caltech.edu",
+            "rssUrl": "https://www.caltech.edu/about/news/rss",
+            "sourceName": "Caltech",
+            "logoUrl": "https://caltech.edu/static/core/img/favicon-120.png?v=6.6.15"
+          }
         ]
       }
     },
     "general_quality_news": {
       "global": {
         "allowlist": [
-          { "domain": "reuters.com", "rssUrl": "https://www.reutersagency.com/feed/?best-topics=top-news", "sourceName": "Reuters" },
-          { "domain": "apnews.com", "rssUrl": "https://apnews.com/apf-topnews?format=xml", "sourceName": "AP News" },
-          { "domain": "bbc.com", "rssUrl": "http://feeds.bbci.co.uk/news/world/rss.xml", "sourceName": "BBC News", "logoUrl": "https://nav.files.bbci.co.uk/orbit/dbed4b0fb8e953c048561a04274a034f/img/blq-orbit-blocks-dark.svg" },
-          { "domain": "npr.org", "rssUrl": "https://feeds.npr.org/1001/rss.xml", "sourceName": "NPR", "logoUrl": "https://media.npr.org/assets/img/npr-logo-1200x630.png" },
-          { "domain": "aljazeera.com", "rssUrl": "https://www.aljazeera.com/xml/rss/all.xml", "sourceName": "Al Jazeera" }
+          {
+            "domain": "reuters.com",
+            "rssUrl": "https://www.reutersagency.com/feed/?best-topics=top-news",
+            "sourceName": "Reuters",
+            "logoUrl": "https://reuters.com/favicon.ico"
+          },
+          {
+            "domain": "apnews.com",
+            "rssUrl": "https://apnews.com/apf-topnews?format=xml",
+            "sourceName": "AP News",
+            "logoUrl": "https://apnews.com/apple-touch-icon.png"
+          },
+          {
+            "domain": "bbc.com",
+            "rssUrl": "http://feeds.bbci.co.uk/news/world/rss.xml",
+            "sourceName": "BBC News",
+            "logoUrl": "https://nav.files.bbci.co.uk/orbit/dbed4b0fb8e953c048561a04274a034f/img/blq-orbit-blocks-dark.svg"
+          },
+          {
+            "domain": "npr.org",
+            "rssUrl": "https://feeds.npr.org/1001/rss.xml",
+            "sourceName": "NPR",
+            "logoUrl": "https://media.npr.org/assets/img/npr-logo-1200x630.png"
+          },
+          {
+            "domain": "aljazeera.com",
+            "rssUrl": "https://www.aljazeera.com/xml/rss/all.xml",
+            "sourceName": "Al Jazeera",
+            "logoUrl": "https://aljazeera.com/favicon_aje.ico"
+          }
         ],
         "notes": "Use these globally only for stories with clear positive/solutions focus. Otherwise rely on dedicated positive feeds."
       },
       "india": {
         "allowlist": [
-          { "domain": "thehindu.com", "rssUrl": "https://www.thehindu.com/feeder/default.rss", "sourceName": "The Hindu" },
-          { "domain": "indianexpress.com", "rssUrl": "https://indianexpress.com/feed/", "sourceName": "Indian Express" },
-          { "domain": "timesofindia.indiatimes.com", "rssUrl": "https://timesofindia.indiatimes.com/rssfeedstopstories.cms", "sourceName": "Times of India" }
+          {
+            "domain": "thehindu.com",
+            "rssUrl": "https://www.thehindu.com/feeder/default.rss",
+            "sourceName": "The Hindu",
+            "logoUrl": "https://www.thehindu.com/apple-touch-icon.png"
+          },
+          {
+            "domain": "indianexpress.com",
+            "rssUrl": "https://indianexpress.com/feed/",
+            "sourceName": "Indian Express",
+            "logoUrl": "https://indianexpress.com/favicon.ico"
+          },
+          {
+            "domain": "timesofindia.indiatimes.com",
+            "rssUrl": "https://timesofindia.indiatimes.com/rssfeedstopstories.cms",
+            "sourceName": "Times of India",
+            "logoUrl": "https://m.timesofindia.com/touch-icon-iphone-precomposed.png"
+          }
         ]
       },
       "europe": {
         "allowlist": [
-          { "domain": "theguardian.com", "rssUrl": "https://www.theguardian.com/world/rss", "sourceName": "The Guardian" },
-          { "domain": "dw.com", "rssUrl": "https://rss.dw.com/rdf/rss-en-all", "sourceName": "DW" },
-          { "domain": "france24.com", "rssUrl": "https://www.france24.com/en/rss", "sourceName": "France 24" }
+          {
+            "domain": "theguardian.com",
+            "rssUrl": "https://www.theguardian.com/world/rss",
+            "sourceName": "The Guardian",
+            "logoUrl": "https://assets.guim.co.uk/static/frontend/icons/homescreen/apple-touch-icon.svg"
+          },
+          {
+            "domain": "dw.com",
+            "rssUrl": "https://rss.dw.com/rdf/rss-en-all",
+            "sourceName": "DW",
+            "logoUrl": "https://dw.com/images/icons/favicon-120x120.png"
+          },
+          {
+            "domain": "france24.com",
+            "rssUrl": "https://www.france24.com/en/rss",
+            "sourceName": "France 24",
+            "logoUrl": "https://france24.com/favicon.ico"
+          }
         ]
       },
       "usa": {
         "allowlist": [
-          { "domain": "nytimes.com", "rssUrl": "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml", "sourceName": "The New York Times", "logoUrl": "https://static01.nyt.com/images/misc/nyt-logo-1200x630.png" },
-          { "domain": "wsj.com", "rssUrl": "https://feeds.a.dj.com/rss/RSSWorldNews.xml", "sourceName": "The Wall Street Journal", "logoUrl": "https://s.wsj.net/img/meta/wsj-social-share.png" },
-          { "domain": "washingtonpost.com", "rssUrl": "https://feeds.washingtonpost.com/rss/world", "sourceName": "The Washington Post", "logoUrl": "https://www.washingtonpost.com/wp-apps/imrs.php?src=https://arc-anglerfish-washpost-prod-washpost.s3.amazonaws.com/public/IXXV6UT42RHNTA2LQL5CVZH7NQ.png" }
+          {
+            "domain": "nytimes.com",
+            "rssUrl": "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml",
+            "sourceName": "The New York Times",
+            "logoUrl": "https://static01.nyt.com/images/misc/nyt-logo-1200x630.png"
+          },
+          {
+            "domain": "wsj.com",
+            "rssUrl": "https://feeds.a.dj.com/rss/RSSWorldNews.xml",
+            "sourceName": "The Wall Street Journal",
+            "logoUrl": "https://s.wsj.net/img/meta/wsj-social-share.png"
+          },
+          {
+            "domain": "washingtonpost.com",
+            "rssUrl": "https://feeds.washingtonpost.com/rss/world",
+            "sourceName": "The Washington Post",
+            "logoUrl": "https://www.washingtonpost.com/wp-apps/imrs.php?src=https://arc-anglerfish-washpost-prod-washpost.s3.amazonaws.com/public/IXXV6UT42RHNTA2LQL5CVZH7NQ.png"
+          }
         ]
       }
     },
     "misinformation_watch": {
       "global": {
         "allowlist": [
-          { "domain": "factcheck.org", "rssUrl": "https://www.factcheck.org/feed/", "sourceName": "FactCheck.org" },
-          { "domain": "reuters.com", "rssUrl": "https://www.reuters.com/pf/api/v3/content/fetch/articles-by-section-alias-or-id-v1?query=%7B%22section_id%22%3A%22%2Ffact-check%22%7D&d=101&_website=reuters", "sourceName": "Reuters Fact Check" },
-          { "domain": "snopes.com", "rssUrl": "https://www.snopes.com/feed/", "sourceName": "Snopes" },
-          { "domain": "fullfact.org", "rssUrl": "https://fullfact.org/feed/", "sourceName": "Full Fact" },
-          { "domain": "politifact.com", "rssUrl": "https://www.politifact.com/rss/", "sourceName": "PolitiFact" },
-          { "domain": "euvsdisinfo.eu", "rssUrl": "https://euvsdisinfo.eu/feed/", "sourceName": "EUvsDisinfo", "logoUrl": "https://euvsdisinfo.eu/uploads/2020/02/Logo-EUvsDISINFO-V01_ORANGE-1.png" }
+          {
+            "domain": "factcheck.org",
+            "rssUrl": "https://www.factcheck.org/feed/",
+            "sourceName": "FactCheck.org",
+            "logoUrl": "https://factcheck.org/apple-icon-57x57.png"
+          },
+          {
+            "domain": "reuters.com",
+            "rssUrl": "https://www.reuters.com/pf/api/v3/content/fetch/articles-by-section-alias-or-id-v1?query=%7B%22section_id%22%3A%22%2Ffact-check%22%7D&d=101&_website=reuters",
+            "sourceName": "Reuters Fact Check",
+            "logoUrl": "https://reuters.com/favicon.ico"
+          },
+          {
+            "domain": "snopes.com",
+            "rssUrl": "https://www.snopes.com/feed/",
+            "sourceName": "Snopes",
+            "logoUrl": "https://snopes.com/apple-touch-icon.png"
+          },
+          {
+            "domain": "fullfact.org",
+            "rssUrl": "https://fullfact.org/feed/",
+            "sourceName": "Full Fact",
+            "logoUrl": "https://fullfact.org/static/img/apple-touch-icon.png"
+          },
+          {
+            "domain": "politifact.com",
+            "rssUrl": "https://www.politifact.com/rss/",
+            "sourceName": "PolitiFact",
+            "logoUrl": "https://static.politifact.com/images/apple-touch-icon.png"
+          },
+          {
+            "domain": "euvsdisinfo.eu",
+            "rssUrl": "https://euvsdisinfo.eu/feed/",
+            "sourceName": "EUvsDisinfo",
+            "logoUrl": "https://euvsdisinfo.eu/uploads/2020/02/Logo-EUvsDISINFO-V01_ORANGE-1.png"
+          }
         ]
       },
       "india": {
         "allowlist": [
-          { "domain": "altnews.in", "rssUrl": "https://www.altnews.in/feed/", "sourceName": "Alt News" },
-          { "domain": "factly.in", "rssUrl": "https://factly.in/feed/", "sourceName": "Factly" },
-          { "domain": "indiatoday.in" },
-          { "domain": "thequint.com" }
+          {
+            "domain": "altnews.in",
+            "rssUrl": "https://www.altnews.in/feed/",
+            "sourceName": "Alt News",
+            "logoUrl": "https://www.altnews.in/wp-content/uploads/2017/11/cropped-alt-logo-cropped-512x512-180x180.jpg"
+          },
+          {
+            "domain": "factly.in",
+            "rssUrl": "https://factly.in/feed/",
+            "sourceName": "Factly",
+            "logoUrl": "https://factly.in/wp-content/uploads/2015/01/factly-144x144.png"
+          },
+          {
+            "domain": "indiatoday.in",
+            "logoUrl": "https://indiatoday.in/favicon.ico"
+          },
+          {
+            "domain": "thequint.com",
+            "logoUrl": "https://fea.assettype.com/thequint/assets/favicons/apple-touch-icon-57x57-aff1e74427.png"
+          }
         ]
       },
       "europe": {
         "allowlist": [
-          { "domain": "dpa-factchecking.com" },
-          { "domain": "ellinikahoaxes.gr" },
-          { "domain": "maldita.es" },
-          { "domain": "correctiv.org" },
-          { "domain": "lesdecodeurs.fr" }
+          {
+            "domain": "dpa-factchecking.com",
+            "logoUrl": "https://dpa-factchecking.com/img/favicon.png"
+          },
+          {
+            "domain": "ellinikahoaxes.gr",
+            "logoUrl": "https://ellinikahoaxes.gr/favicon.ico"
+          },
+          {
+            "domain": "maldita.es",
+            "logoUrl": "https://maldita.es/images/logos/maldita_logo_cuadrado_grande.png"
+          },
+          {
+            "domain": "correctiv.org",
+            "logoUrl": "https://correctiv.org/wp-content/uploads/2018/11/favicon-152.png"
+          },
+          {
+            "domain": "lesdecodeurs.fr",
+            "logoUrl": "https://lesdecodeurs.fr/static/picto.webp"
+          }
         ]
       },
       "usa": {
         "allowlist": [
-          { "domain": "factcheck.org", "rssUrl": "https://www.factcheck.org/feed/", "sourceName": "FactCheck.org" },
-          { "domain": "politifact.com", "rssUrl": "https://www.politifact.com/rss/", "sourceName": "PolitiFact" },
-          { "domain": "snopes.com", "rssUrl": "https://www.snopes.com/feed/", "sourceName": "Snopes" },
-          { "domain": "washingtonpost.com" }
+          {
+            "domain": "factcheck.org",
+            "rssUrl": "https://www.factcheck.org/feed/",
+            "sourceName": "FactCheck.org",
+            "logoUrl": "https://factcheck.org/apple-icon-57x57.png"
+          },
+          {
+            "domain": "politifact.com",
+            "rssUrl": "https://www.politifact.com/rss/",
+            "sourceName": "PolitiFact",
+            "logoUrl": "https://static.politifact.com/images/apple-touch-icon.png"
+          },
+          {
+            "domain": "snopes.com",
+            "rssUrl": "https://www.snopes.com/feed/",
+            "sourceName": "Snopes",
+            "logoUrl": "https://snopes.com/apple-touch-icon.png"
+          },
+          {
+            "domain": "washingtonpost.com",
+            "logoUrl": "https://washingtonpost.com/favicon.ico"
+          }
         ]
       }
     }

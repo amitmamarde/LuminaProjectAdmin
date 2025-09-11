@@ -16,11 +16,16 @@ class ArticleFeedCard extends StatelessWidget {
     // Determine the theme based on the article type, with a fallback to the default.
     final theme = articleTypeThemes[article.articleType] ?? defaultTheme;
 
-    // Build the proxied image URL.
+    // Determine the primary image URL to use, falling back to the source logo.
+    final primaryImageUrl = (article.imageUrl != null && article.imageUrl!.isNotEmpty)
+        ? article.imageUrl
+        : article.sourceLogoUrl;
+
+    // Build the proxied image URL if a primary URL exists.
     // Using a relative path makes the request same-origin on the web, avoiding CORS.
     String? proxiedImageUrl;
-    if (article.imageUrl != null && article.imageUrl!.isNotEmpty) {
-      final encodedUrl = Uri.encodeComponent(article.imageUrl!);
+    if (primaryImageUrl != null && primaryImageUrl.isNotEmpty) {
+      final encodedUrl = Uri.encodeComponent(primaryImageUrl);
       proxiedImageUrl = '/imageProxy?url=$encodedUrl';
     }
 
@@ -35,40 +40,22 @@ class ArticleFeedCard extends StatelessWidget {
               height: MediaQuery.of(context).size.height * 0.35,
               width: double.infinity,
               color: Colors.grey[200],
-              // Added key to force refresh cached image when URL is the same
-              key: ValueKey(article.imageUrl),
+              // Use the primaryImageUrl as the key to force refresh when it changes.
+              key: ValueKey(primaryImageUrl),
               //Explicitly define headers
               
               child: (proxiedImageUrl != null)
                   ? CachedNetworkImage(
                       imageUrl: proxiedImageUrl,
+                      // Use the sourceLogoUrl as the fallback image within the error widget.
+                      // This handles cases where the main imageUrl is broken.
+                      errorWidget: (context, url, error) => _buildFallbackImage(
+                          context, theme, article.sourceLogoUrl),
                       fit: BoxFit.cover,
                       placeholder: (context, url) => Center(
                         child: CircularProgressIndicator(
                           color: theme.accent,
                          ),
-                      ),
-                      errorWidget: (context, url, error) => Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text('Lumina',
-                                style: GoogleFonts.lato(
-                                  fontSize: 48,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black.withOpacity(0.15),
-                                )),
-                            Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 16.0),
-                              child: Text(
-                                'Image could not be loaded.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: theme.textSecondary),
-                              ),
-                            )
-                          ],
-                        ),
                       ),
                     )
                   : Center(
@@ -123,6 +110,52 @@ class ArticleFeedCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// A helper widget to build the fallback image view.
+  /// It first tries to load the source logo, and if that fails, shows the Lumina placeholder.
+  Widget _buildFallbackImage(
+      BuildContext context, ArticleTheme theme, String? sourceLogoUrl) {
+    // If a source logo URL is available, try to display it.
+    if (sourceLogoUrl != null && sourceLogoUrl.isNotEmpty) {
+      final encodedUrl = Uri.encodeComponent(sourceLogoUrl);
+      final proxiedLogoUrl = '/imageProxy?url=$encodedUrl';
+
+      return CachedNetworkImage(
+        imageUrl: proxiedLogoUrl,
+        fit: BoxFit.contain, // Use contain to show the whole logo without cropping
+        placeholder: (context, url) => Center(
+            child: CircularProgressIndicator(color: theme.accent)),
+        // If even the logo fails, show the final placeholder.
+        errorWidget: (context, url, error) => _buildLuminaPlaceholder(theme),
+      );
+    }
+
+    // If no source logo is available, show the Lumina placeholder directly.
+    return _buildLuminaPlaceholder(theme);
+  }
+
+  /// The final placeholder widget with the "Lumina" text.
+  Widget _buildLuminaPlaceholder(ArticleTheme theme) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text('Lumina',
+              style: GoogleFonts.lato(
+                fontSize: 48,
+                fontWeight: FontWeight.bold,
+                color: Colors.black.withOpacity(0.15),
+              )),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Text('Image not available',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: theme.textSecondary)),
+          )
+        ],
       ),
     );
   }

@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/article.dart';
 import 'package:share_plus/share_plus.dart';
+import '../theme/article_themes.dart'; // Import themes for consistency
 
 /// This screen displays the primary "flash card" view for an article,
 /// styled similarly to apps like Inshorts.
@@ -14,34 +15,43 @@ class ArticleDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Use the same theme logic as the feed card for consistency
+    final theme = articleTypeThemes[article.articleType] ?? defaultTheme;
+
     final bool hasDeepDive = article.articleType == 'Misinformation';
     final String readButtonText =
         hasDeepDive ? 'Read Full Story' : 'Read at ${article.sourceTitle ?? 'Source'}';
 
+    // Determine the primary image URL to use, falling back to the source logo.
+    final primaryImageUrl = (article.imageUrl != null && article.imageUrl!.isNotEmpty)
+        ? article.imageUrl
+        : article.sourceLogoUrl;
+
+    // Build the proxied image URL if a primary URL exists.
+    String? proxiedImageUrl;
+    if (primaryImageUrl != null && primaryImageUrl.isNotEmpty) {
+      final encodedUrl = Uri.encodeComponent(primaryImageUrl);
+      proxiedImageUrl = '/imageProxy?url=$encodedUrl';
+    }
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: theme.base, // Use theme color
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // 1. Image placeholder (40% of screen height)
           SizedBox(
             height: MediaQuery.of(context).size.height * 0.4,
-            child: (article.imageUrl != null && article.imageUrl!.isNotEmpty)
+            child: (proxiedImageUrl != null)
                 ? CachedNetworkImage(
-                    imageUrl: article.imageUrl!,
+                    imageUrl: proxiedImageUrl,
                     fit: BoxFit.cover,
                     placeholder: (context, url) =>
-                        Container(color: Colors.grey[900]),
-                    errorWidget: (context, url, error) => Container(
-                      color: Colors.grey[900],
-                      child: const Icon(Icons.image_not_supported,
-                          color: Colors.grey, size: 50),
-                    ),
+                        Center(child: CircularProgressIndicator(color: theme.accent)),
+                    errorWidget: (context, url, error) =>
+                        _buildFallbackImage(context, theme, article.sourceLogoUrl),
                   )
-                : Container(
-                    color: Colors.grey[900],
-                    child: const Icon(Icons.image, color: Colors.grey, size: 50),
-                  ),
+                : _buildLuminaPlaceholder(theme),
           ),
           // 2. Content area (remaining 60%)
           Expanded(
@@ -55,7 +65,7 @@ class ArticleDetailScreen extends StatelessWidget {
                     style: GoogleFonts.lato(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: theme.text,
                     ),
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
@@ -67,7 +77,7 @@ class ArticleDetailScreen extends StatelessWidget {
                         article.flashContent ?? 'Summary not available.',
                         style: GoogleFonts.lato(
                           fontSize: 16,
-                          color: Colors.grey[400],
+                          color: theme.textSecondary,
                           height: 1.5,
                         ),
                       ),
@@ -87,12 +97,12 @@ class ArticleDetailScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text('Source',
-                                  style: TextStyle(
-                                      color: Colors.grey[500], fontSize: 12)),
+                                  style:
+                                      TextStyle(color: theme.textSecondary, fontSize: 12)),
                               Text(
                                 article.sourceTitle ?? 'N/A',
-                                style: const TextStyle(
-                                    color: Colors.white,
+                                style: TextStyle(
+                                    color: theme.text,
                                     fontWeight: FontWeight.bold),
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -103,8 +113,8 @@ class ArticleDetailScreen extends StatelessWidget {
                         ElevatedButton(
                           onPressed: () => _launchAction(context),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: Colors.black,
+                            backgroundColor: theme.accent,
+                            foregroundColor: theme.base,
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(30)),
                             padding: const EdgeInsets.symmetric(
@@ -119,7 +129,7 @@ class ArticleDetailScreen extends StatelessWidget {
                           child: Align(
                             alignment: Alignment.centerRight,
                             child: IconButton(
-                              icon: const Icon(Icons.share, color: Colors.white),
+                              icon: Icon(Icons.share, color: theme.text),
                               onPressed: () => _shareArticle(context),
                             ),
                           ),
@@ -131,6 +141,52 @@ class ArticleDetailScreen extends StatelessWidget {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  /// A helper widget to build the fallback image view.
+  /// It first tries to load the source logo, and if that fails, shows the Lumina placeholder.
+  Widget _buildFallbackImage(
+      BuildContext context, ArticleTheme theme, String? sourceLogoUrl) {
+    // If a source logo URL is available, try to display it.
+    if (sourceLogoUrl != null && sourceLogoUrl.isNotEmpty) {
+      final encodedUrl = Uri.encodeComponent(sourceLogoUrl);
+      final proxiedLogoUrl = '/imageProxy?url=$encodedUrl';
+
+      return CachedNetworkImage(
+        imageUrl: proxiedLogoUrl,
+        fit: BoxFit.contain, // Use contain to show the whole logo without cropping
+        placeholder: (context, url) => Center(
+            child: CircularProgressIndicator(color: theme.accent)),
+        // If even the logo fails, show the final placeholder.
+        errorWidget: (context, url, error) => _buildLuminaPlaceholder(theme),
+      );
+    }
+
+    // If no source logo is available, show the Lumina placeholder directly.
+    return _buildLuminaPlaceholder(theme);
+  }
+
+  /// The final placeholder widget with the "Lumina" text.
+  Widget _buildLuminaPlaceholder(ArticleTheme theme) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text('Lumina',
+              style: GoogleFonts.lato(
+                fontSize: 48,
+                fontWeight: FontWeight.bold,
+                color: Colors.black.withOpacity(0.15),
+              )),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Text('Image not available',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: theme.textSecondary)),
+          )
         ],
       ),
     );

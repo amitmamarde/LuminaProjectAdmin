@@ -1,0 +1,168 @@
+{
+  "version": "2025-08-29",
+  "sources": {
+    "positive_news": {
+      "global": {
+        "allowlist": [
+          { "domain": "positive.news", "rssUrl": "https://www.positive.news/feed/", "sourceName": "Positive News" },
+          { "domain": "goodnewsnetwork.org", "rssUrl": "https://www.goodnewsnetwork.org/feed/", "sourceName": "Good News Network" },
+          { "domain": "optimistdaily.com", "rssUrl": "https://www.optimistdaily.com/feed/", "sourceName": "The Optimist Daily" },
+          { "domain": "goodgoodgood.co", "rssUrl": "https://www.goodgoodgood.co/rss", "sourceName": "Good Good Good" },
+          { "domain": "reasonstobecheerful.world", "rssUrl": "https://reasonstobecheerful.world/feed/", "sourceName": "Reasons to be Cheerful" },
+          { "domain": "yesmagazine.org", "rssUrl": "https://www.yesmagazine.org/feed/", "sourceName": "YES! Magazine" },
+          { "domain": "goodblacknews.org", "rssUrl": "https://goodblacknews.org/feed/", "sourceName": "Good Black News" },
+          { "domain": "inspiremore.com", "rssUrl": "https://www.inspiremore.com/feed/", "sourceName": "InspireMore" },
+          { "domain": "huffpost.com", "rssUrl": "https://www.huffpost.com/section/good-news/feed", "sourceName": "HuffPost Good News" }
+        ]
+      },
+      "india": {
+        "allowlist": [
+          { "domain": "thebetterindia.com", "rssUrl": "https://www.thebetterindia.com/feed/", "sourceName": "The Better India" },
+          { "domain": "indianexpress.com", "rssUrl": "https://indianexpress.com/section/good-news/feed/", "sourceName": "Indian Express" },
+          { "domain": "timesofindia.indiatimes.com", "rssUrl": "https://timesofindia.indiatimes.com/rssfeeds/3942753.cms", "sourceName": "Times of India" }
+        ]
+      },
+      "europe": {
+        "allowlist": [
+          { "domain": "positive.news" },
+          { "domain": "euronews.com", "rssUrl": "https://www.euronews.com/rss?format=mrss&level=vertical&name=next", "sourceName": "Euronews" },
+          { "domain": "theguardian.com", "rssUrl": "https://www.theguardian.com/world/series/the-upside/rss", "sourceName": "The Guardian Upside" }
+        ]
+      },
+      "usa": {
+        "allowlist": [
+          { "domain": "sunnyskyz.com", "rssUrl": "https://feeds.feedburner.com/SunnySkyz", "sourceName": "Sunny Skyz" },
+          { "domain": "today.com", "rssUrl": "https://www.today.com/news/good-news/rss", "sourceName": "TODAY" },
+          { "domain": "usatoday.com", "rssUrl": "http://rssfeeds.usatoday.com/usatoday-newstopstories", "sourceName": "USA TODAY" }
+        ]
+      }
+    },
+    "research_breakthroughs": {
+      "global": {
+        "allowlist": [
+          { "domain": "futurity.org", "rssUrl": "https://www.futurity.org/feed/", "sourceName": "Futurity" },
+          { "domain": "theconversation.com", "rssUrl": "https://theconversation.com/us/articles.atom", "sourceName": "The Conversation" },
+          { "domain": "sciencedaily.com", "rssUrl": "https://www.sciencedaily.com/rss/all.xml", "sourceName": "ScienceDaily" },
+          { "domain": "space.com", "rssUrl": "https://www.space.com/feeds/all", "sourceName": "Space.com" },
+          { "domain": "sciencex.com", "rssUrl": "https://phys.org/rss-feed/", "sourceName": "Phys.org" },
+          { "domain": "nasa.gov", "rssUrl": "https://www.nasa.gov/rss/dyn/breaking_news.rss", "sourceName": "NASA" },
+          { "domain": "esa.int", "rssUrl": "https://www.esa.int/feeds/esa_top_news.rss", "sourceName": "ESA" },
+          { "domain": "nature.com", "rssUrl": "https://www.nature.com/nature.rss", "sourceName": "Nature" },
+          { "domain": "science.org", "rssUrl": "https://www.science.org/rss/news_current.xml", "sourceName": "Science Magazine", "logoUrl": "https://www.science.org/apple-touch-icon.png" },
+          { "domain": "arxiv.org" },
+          { "domain": "medrxiv.org" },
+          { "domain": "biorxiv.org" }
+        ],
+        "notes": "Includes official feeds (NASA, ESA, etc.) and top science news sites (ScienceDaily, Space.com, etc.). Preprint servers (arXiv, medRxiv, bioRxiv) are included with disclaimers; preference given to peer-reviewed follow-ups."
+      },
+      "india": {
+        "allowlist": [
+          { "domain": "isro.gov.in" },
+          { "domain": "dst.gov.in" },
+          { "domain": "dbtindia.gov.in" },
+          { "domain": "icmr.gov.in" },
+          { "domain": "iitm.ac.in" },
+          { "domain": "iitb.ac.in" },
+          { "domain": "iitd.ac.in" },
+          { "domain": "iisc.ac.in" },
+          { "domain": "csir.res.in" }
+        ]
+      },
+      "europe": {
+        "allowlist": [
+          { "domain": "ec.europa.eu" },
+          { "domain": "erc.europa.eu" },
+          { "domain": "ukri.org" },
+          { "domain": "cnrs.fr" },
+          { "domain": "helmholtz.de" },
+          { "domain": "ox.ac.uk" },
+          { "domain": "cam.ac.uk" },
+          { "domain": "ethz.ch" },
+          { "domain": "imperial.ac.uk" }
+        ]
+      },
+      "usa": {
+        "allowlist": [
+          { "domain": "news.mit.edu", "rssUrl": "https://news.mit.edu/rss/feed", "sourceName": "MIT News" },
+          { "domain": "news.stanford.edu", "rssUrl": "https://news.stanford.edu/feed/", "sourceName": "Stanford News" },
+          { "domain": "news.harvard.edu", "rssUrl": "https://news.harvard.edu/gazette/feed/", "sourceName": "The Harvard Gazette", "logoUrl": "https://news.harvard.edu/gazette/wp-content/uploads/2021/01/cropped-gazette-icon-1-270x270.png" },
+          { "domain": "caltech.edu", "rssUrl": "https://www.caltech.edu/about/news/rss", "sourceName": "Caltech" }
+        ]
+      }
+    },
+    "general_quality_news": {
+      "global": {
+        "allowlist": [
+          { "domain": "reuters.com", "rssUrl": "https://www.reutersagency.com/feed/?best-topics=top-news", "sourceName": "Reuters" },
+          { "domain": "apnews.com", "rssUrl": "https://apnews.com/apf-topnews?format=xml", "sourceName": "AP News" },
+          { "domain": "bbc.com", "rssUrl": "http://feeds.bbci.co.uk/news/world/rss.xml", "sourceName": "BBC News", "logoUrl": "https://nav.files.bbci.co.uk/orbit/dbed4b0fb8e953c048561a04274a034f/img/blq-orbit-blocks-dark.svg" },
+          { "domain": "npr.org", "rssUrl": "https://feeds.npr.org/1001/rss.xml", "sourceName": "NPR", "logoUrl": "https://media.npr.org/assets/img/npr-logo-1200x630.png" },
+          { "domain": "aljazeera.com", "rssUrl": "https://www.aljazeera.com/xml/rss/all.xml", "sourceName": "Al Jazeera" }
+        ],
+        "notes": "Use these globally only for stories with clear positive/solutions focus. Otherwise rely on dedicated positive feeds."
+      },
+      "india": {
+        "allowlist": [
+          { "domain": "thehindu.com", "rssUrl": "https://www.thehindu.com/feeder/default.rss", "sourceName": "The Hindu" },
+          { "domain": "indianexpress.com", "rssUrl": "https://indianexpress.com/feed/", "sourceName": "Indian Express" },
+          { "domain": "timesofindia.indiatimes.com", "rssUrl": "https://timesofindia.indiatimes.com/rssfeedstopstories.cms", "sourceName": "Times of India" }
+        ]
+      },
+      "europe": {
+        "allowlist": [
+          { "domain": "theguardian.com", "rssUrl": "https://www.theguardian.com/world/rss", "sourceName": "The Guardian" },
+          { "domain": "dw.com", "rssUrl": "https://rss.dw.com/rdf/rss-en-all", "sourceName": "DW" },
+          { "domain": "france24.com", "rssUrl": "https://www.france24.com/en/rss", "sourceName": "France 24" }
+        ]
+      },
+      "usa": {
+        "allowlist": [
+          { "domain": "nytimes.com", "rssUrl": "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml", "sourceName": "The New York Times", "logoUrl": "https://static01.nyt.com/images/misc/nyt-logo-1200x630.png" },
+          { "domain": "wsj.com", "rssUrl": "https://feeds.a.dj.com/rss/RSSWorldNews.xml", "sourceName": "The Wall Street Journal", "logoUrl": "https://s.wsj.net/img/meta/wsj-social-share.png" },
+          { "domain": "washingtonpost.com", "rssUrl": "https://feeds.washingtonpost.com/rss/world", "sourceName": "The Washington Post", "logoUrl": "https://www.washingtonpost.com/wp-apps/imrs.php?src=https://arc-anglerfish-washpost-prod-washpost.s3.amazonaws.com/public/IXXV6UT42RHNTA2LQL5CVZH7NQ.png" }
+        ]
+      }
+    },
+    "misinformation_watch": {
+      "global": {
+        "allowlist": [
+          { "domain": "factcheck.org", "rssUrl": "https://www.factcheck.org/feed/", "sourceName": "FactCheck.org" },
+          { "domain": "reuters.com", "rssUrl": "https://www.reuters.com/pf/api/v3/content/fetch/articles-by-section-alias-or-id-v1?query=%7B%22section_id%22%3A%22%2Ffact-check%22%7D&d=101&_website=reuters", "sourceName": "Reuters Fact Check" },
+          { "domain": "snopes.com", "rssUrl": "https://www.snopes.com/feed/", "sourceName": "Snopes" },
+          { "domain": "fullfact.org", "rssUrl": "https://fullfact.org/feed/", "sourceName": "Full Fact" },
+          { "domain": "politifact.com", "rssUrl": "https://www.politifact.com/rss/", "sourceName": "PolitiFact" },
+          { "domain": "euvsdisinfo.eu", "rssUrl": "https://euvsdisinfo.eu/feed/", "sourceName": "EUvsDisinfo", "logoUrl": "https://euvsdisinfo.eu/uploads/2020/02/Logo-EUvsDISINFO-V01_ORANGE-1.png" }
+        ]
+      },
+      "india": {
+        "allowlist": [
+          { "domain": "altnews.in", "rssUrl": "https://www.altnews.in/feed/", "sourceName": "Alt News" },
+          { "domain": "factly.in", "rssUrl": "https://factly.in/feed/", "sourceName": "Factly" },
+          { "domain": "indiatoday.in" },
+          { "domain": "thequint.com" }
+        ]
+      },
+      "europe": {
+        "allowlist": [
+          { "domain": "dpa-factchecking.com" },
+          { "domain": "ellinikahoaxes.gr" },
+          { "domain": "maldita.es" },
+          { "domain": "correctiv.org" },
+          { "domain": "lesdecodeurs.fr" }
+        ]
+      },
+      "usa": {
+        "allowlist": [
+          { "domain": "factcheck.org", "rssUrl": "https://www.factcheck.org/feed/", "sourceName": "FactCheck.org" },
+          { "domain": "politifact.com", "rssUrl": "https://www.politifact.com/rss/", "sourceName": "PolitiFact" },
+          { "domain": "snopes.com", "rssUrl": "https://www.snopes.com/feed/", "sourceName": "Snopes" },
+          { "domain": "washingtonpost.com" }
+        ]
+      }
+    }
+  },
+  "search_fallback": {
+    "allow_public_search": true,
+    "rule": "ONLY with site: filters composed from the relevant allowlist"
+  }
+}
