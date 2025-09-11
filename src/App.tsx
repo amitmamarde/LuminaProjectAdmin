@@ -855,14 +855,8 @@ const ArticleListPage: React.FC = () => {
         fetchArticles();
     }, [fetchArticles]);
 
-    const filteredArticles = useMemo(() => {
-        return articles.filter(article => {
-            return filterType === 'all' || article.articleType === filterType;
-        });
-    }, [articles, filterType]);
 
-    const getDomainFromUrl = (url: string | undefined): string | null => {
-    const filteredArticles = useMemo(() => {
+   const filteredArticles = useMemo(() => {
         return articles.filter(article => {
             const typeFilter = filterType === 'all' || article.articleType === filterType;
             const votedFilter = filterVoted === 'all' ||
@@ -873,7 +867,8 @@ const ArticleListPage: React.FC = () => {
         });
     }, [articles, filterType, filterVoted, votedArticles]);
 
-   const getDomainFromUrl = (url: string | undefined): string | null => {    if (!url) return null;
+    const getDomainFromUrl = (url: string | undefined): string | null => {
+        if (!url) return null;
         try {
             return new URL(url).hostname.replace(/^www\./, '');
         } catch (e) {
@@ -1020,6 +1015,7 @@ const ArticleListPage: React.FC = () => {
         </div>
     );
 };
+
 
 const TaskListPage: React.FC<{ mode: 'my-tasks' | 'admin-review' }> = ({ mode }) => {
     const { userData } = useAuth();
@@ -1630,6 +1626,7 @@ const App: React.FC = () => {
     </AuthProvider>
   );
 };
+
 
 const AppRouter: React.FC = () => {
     const { user, userData, loading } = useAuth();
