@@ -3,31 +3,43 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ----------------------------
-    // Helper functions
-    // ----------------------------
-    function userRole() {
-      return request.auth != null
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
-        : null;
-    }
+    // Helper function to check if the user is an authenticated Admin
     function isAdmin() {
-      return userRole() == 'Admin';
-    }
-    function isExpert() {
-      let r = userRole();
-      return r == 'Expert' || r == 'expert';
-    }
-    function isUnclaimed(articleData) {
-        return !('expertId' in articleData)
-            || articleData.expertId == null
-            || articleData.expertId == "";
+      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
     }
 
-    // ----------------------------
-    // /users collection
-    // ----------------------------
+    // Helper function to check if the user is an authenticated Expert
+    function isExpert() {
+      return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Expert';
+    }
+
+    // --- NEW: Rules for the trainingData collection ---
+    // Allow Admins to create documents in the trainingData collection.
+    match /trainingData/{docId} {
+      allow create: if isAdmin();
+      // No one should read/update/delete these directly for now.
+      allow read, update, delete: if false;
+    }
+
+    // Rules for the articles collection
+    match /articles/{articleId} {
+      // ANYONE can read a published article.
+      allow get: if resource.data.status == 'Published';
+      
+      // AUTHENTICATED users can list/read articles based on their role.
+      allow list, read: if request.auth != null;
+
+      // ADMINS have full control to create and delete.
+      allow create, delete: if isAdmin();
+
+      // --- UPDATED: Broadened update rule ---
+      // This allows Admins to perform any update (including setting status to 'Archived').
+      // It also allows Experts to update articles specifically assigned to them.
+      allow update: if isAdmin() || 
+                     (isExpert() && resource.data.expertId == request.auth.uid);
+    }
+
+    // Rules for user profiles
     match /users/{userId} {
       // Any authenticated user can read profile data (e.g., to see an expert's name).
       allow read: if request.auth != null;
@@ -36,52 +48,16 @@ service cloud.firestore {
       // Only Admins can create or delete user docs.
       allow create, delete: if isAdmin();
     }
-
-    // ----------------------------
-    // /articles collection
-    // ----------------------------
-    match /articles/{articleId} {
-      // Anyone can read a published article. Authenticated users can read others.
-      allow read: if request.auth != null || resource.data.status == 'Published';
-      // Only Admins can create or delete articles.
-      allow create, delete: if isAdmin();
-
-      allow update: if
-        isAdmin() ||
-        (isExpert() && (
-          // --- CONDITION A: Claiming an article ---
-          (
-            resource.data.status == 'AwaitingExpertReview' &&
-            isUnclaimed(resource.data) &&
-            request.resource.data.expertId == request.auth.uid &&
-            request.resource.data.status == resource.data.status &&
-            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['expertId', 'expertDisplayName'])
-          )
-          ||
-          // --- CONDITION B: Submitting a completed review ---
-          (
-            resource.data.expertId == request.auth.uid &&
-            (resource.data.status == 'AwaitingExpertReview' || resource.data.status == 'NeedsRevision') &&
-            request.resource.data.status == 'AwaitingAdminReview' &&
-            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'flashContent', 'deepDiveContent'])
-          )
-          ||
-          // --- CONDITION C: Saving a draft ---
-          (
-            resource.data.expertId == request.auth.uid &&
-            (resource.data.status == 'AwaitingExpertReview' || resource.data.status == 'NeedsRevision') &&
-            request.resource.data.status == resource.data.status &&
-            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['flashContent', 'deepDiveContent'])
-          )
-        ));
+    
+    // Rules for source test reports (and their subcollections)
+    match /sourceTestReports/{reportId}/{document=**} {
+        allow read, write: if isAdmin();
     }
 
-    // ----------------------------
-    // /suggested_topics collection  <- THIS IS THE FIX
-    // ----------------------------
+    // Rules for suggested topics
     match /suggested_topics/{suggestionId} {
-        // Only Admins can read the topic suggestions and delete them (approve/reject).
-        allow read, delete: if isAdmin();
+      // Only Admins can read the topic suggestions and delete them (approve/reject).
+      allow read, delete: if isAdmin();
     }
   }
 }

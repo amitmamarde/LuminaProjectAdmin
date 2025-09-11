@@ -148,6 +148,7 @@ const Badge: React.FC<{ status: ArticleStatus | UserProfile['status'] }> = ({ st
     [ArticleStatusEnum.AwaitingAdminReview]: 'bg-blue-200 text-blue-800',
     [ArticleStatusEnum.NeedsRevision]: 'bg-red-200 text-red-800',
     [ArticleStatusEnum.Published]: 'bg-green-200 text-green-800',
+    'Archived': 'bg-gray-500 text-white',
     'active': 'bg-green-200 text-green-800',
     'disabled': 'bg-red-200 text-red-800',
   };
@@ -858,29 +859,54 @@ const ArticleListPage: React.FC = () => {
         });
     }, [articles, filterType]);
 
+    const getDomainFromUrl = (url: string | undefined): string | null => {
+        if (!url) return null;
+        try {
+            return new URL(url).hostname.replace(/^www\./, '');
+        } catch (e) {
+            console.warn("Could not parse domain from URL:", url);
+            return url; // Fallback to the original url if parsing fails
+        }
+    }
+
     const handleVote = async (article: Article, vote: 'up' | 'down') => {
         if (!user) return;
 
         try {
+            // Step 1: Always record the vote for training data.
             const trainingDataRef = collection(db, 'trainingData');
             await addDoc(trainingDataRef, {
                 articleId: article.id,
                 title: article.title,
                 shortDescription: article.shortDescription,
                 sourceUrl: article.sourceUrl,
-                sourceDomain: article.sourceTitle, // Assuming sourceTitle holds the domain
+                sourceDomain: getDomainFromUrl(article.sourceUrl), // Get clean domain from URL
                 vote: vote,
                 ratedAt: serverTimestamp(),
                 ratedBy: user.uid,
             });
 
-            // To give feedback and remove the item from the list, we can update its status.
-            // Let's move it to a new status, e.g., 'Archived', so it doesn't show up in the 'Draft' queue anymore.
-            // This assumes you have Firestore rules that allow this update.
+            // Step 2: Update the article's status based on the vote.
             const articleRef = doc(db, 'articles', article.id);
-            await updateDoc(articleRef, {
-                status: 'Archived' // A new, simple status to hide it from the training queue.
-            });
+
+            if (vote === 'down') {
+                // For a 'down' vote, we archive the article to remove it from all queues. This is correct.
+                await updateDoc(articleRef, {
+                    status: 'Archived'
+                });
+            } else { // vote === 'up'
+                // For an 'up' vote on a 'Draft', we should publish it.
+                // If it's already 'Published', we do nothing to its status.
+                if (article.status === ArticleStatusEnum.Draft) {
+                    await updateDoc(articleRef, {
+                        status: ArticleStatusEnum.Published,
+                        publishedAt: serverTimestamp(), // Set the publication timestamp
+                    });
+                }
+                // If the status is anything else (e.g., already Published), we just recorded the vote
+                // and don't need to change the status. The article will disappear from the 'Draft'
+                // filter view automatically because its status changed.
+            }
             
             // The onSnapshot listener will automatically refresh the list.
         } catch (error) {
@@ -903,6 +929,7 @@ const ArticleListPage: React.FC = () => {
                                 {Object.values(ArticleStatusEnum).map(status => (
                                     <option key={status} value={status}>{status.replace(/([A-Z])/g, ' $1').trim()}</option>
                                 ))}
+                                <option value="Archived">Archived</option>
                             </select>
                         </div>
                         <div>
