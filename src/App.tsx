@@ -969,7 +969,7 @@ const ArticleListPage: React.FC = () => {
                             <table className="min-w-full divide-y divide-gray-200">
                                <thead className="bg-gray-50">
                                     <tr>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Title</th>
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Short Description</th>
@@ -988,7 +988,7 @@ const ArticleListPage: React.FC = () => {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{article.articleType}</td>
                                             <td className="px-6 py-4 whitespace-nowrap"><Badge status={article.status} /></td>
-                                            <td className="px-6 py-4 text-sm text-gray-500 break-words">{article.shortDescription}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-500 break-words w-1/2">{article.shortDescription}</td>
                                             <td className="px-6 py-4 text-sm text-gray-500 break-words">{article.flashContent}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{article.createdAt.toDate().toLocaleDateString()}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-center">
