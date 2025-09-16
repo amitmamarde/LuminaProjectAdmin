@@ -1404,6 +1404,83 @@ export const imageProxy = onRequest({
     }
 });
 
+/**
+ * Helper function to delete documents from a query in batches.
+ * This is important to avoid memory issues when deleting large numbers of documents.
+ * @param {admin.firestore.Firestore} db The Firestore database instance.
+ * @param {admin.firestore.Query} query The query for documents to delete.
+ * @param {number} [batchSize=500] The number of documents to delete in each batch.
+ * @returns {Promise<number>} The total number of documents deleted.
+ */
+async function deleteQueryBatch(db, query, batchSize = 500) {
+    const snapshot = await query.get();
+
+    if (snapshot.size === 0) {
+        return 0; // No documents to delete.
+    }
+
+    let deletedCount = 0;
+    // Process in chunks of batchSize, as Firestore batch writes are limited.
+    for (let i = 0; i < snapshot.docs.length; i += batchSize) {
+        const chunk = snapshot.docs.slice(i, i + batchSize);
+        const batch = db.batch();
+        chunk.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
+        deletedCount += chunk.length;
+    }
+    return deletedCount;
+}
+
+/**
+ * A scheduled function that runs daily to clean up old articles from Firestore.
+ * - Deletes "Trending Topic" articles older than 3 days.
+ * - Deletes other articles (Positive News, Research, Misinfo) older than 7 days.
+ */
+export const cleanupOldArticles = onSchedule({
+    schedule: "every 24 hours",
+    region: "europe-west1",
+    timeoutSeconds: 540, // Allow up to 9 minutes for potentially large cleanup jobs.
+}, async (event) => {
+    console.log("Running daily article cleanup job...");
+
+    const now = new Date();
+    const threeDaysAgo = new Date(now.getTime() - (3 * 24 * 60 * 60 * 1000));
+    const sevenDaysAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+
+    // Convert to Firestore Timestamps for querying.
+    const threeDaysAgoTimestamp = admin.firestore.Timestamp.fromDate(threeDaysAgo);
+    const sevenDaysAgoTimestamp = admin.firestore.Timestamp.fromDate(sevenDaysAgo);
+
+    const articlesRef = db.collection('articles');
+    let totalDeleted = 0;
+
+    try {
+        // 1. Clean up "Trending Topic" articles older than 3 days.
+        console.log(`Deleting "Trending Topic" articles created on or before ${threeDaysAgo.toISOString()}`);
+        const trendingQuery = articlesRef.where('articleType', '==', 'Trending Topic').where('createdAt', '<=', threeDaysAgoTimestamp);
+        const trendingDeletedCount = await deleteQueryBatch(db, trendingQuery);
+        console.log(`Deleted ${trendingDeletedCount} old "Trending Topic" articles.`);
+        totalDeleted += trendingDeletedCount;
+
+        // 2. Clean up other articles older than 7 days.
+        console.log(`Deleting other articles created on or before ${sevenDaysAgo.toISOString()}`);
+        const otherArticleTypes = ['Positive News', 'Research Breakthrough', 'Misinformation'];
+        for (const articleType of otherArticleTypes) {
+            console.log(`  - Querying for old "${articleType}" articles...`);
+            const query = articlesRef.where('articleType', '==', articleType).where('createdAt', '<=', sevenDaysAgoTimestamp);
+            const deletedCount = await deleteQueryBatch(db, query);
+            console.log(`  - Deleted ${deletedCount} old "${articleType}" articles.`);
+            totalDeleted += deletedCount;
+        }
+
+        console.log(`Daily cleanup complete. Total articles deleted: ${totalDeleted}.`);
+    } catch (error) {
+        console.error("Error during daily article cleanup:", error);
+        throw new Error(`Article cleanup failed: ${error.message}`);
+    }
+});
 
 
 export const processArticle = onTaskDispatched(

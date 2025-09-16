@@ -1,0 +1,345 @@
+--- Article Creation Stats (Last 30 Days) ---
+
+Total Articles Created: 850
+
+--- Articles by Date ---
+2025-09-16: 141
+2025-09-15: 94
+2025-09-14: 89
+2025-09-13: 140
+2025-09-12: 142
+2025-09-11: 203
+2025-09-06: 41
+
+--- Articles by Type ---
+Trending Topic           : 349
+Research Breakthrough    : 224
+Positive News            : 148
+Misinformation           : 129
+
+--- Articles by Category ---
+No articles with categories found.
+
+--- Articles by Source (and Date) ---
+
+Snopes (Total: 57)
+  - 2025-09-16: 10 articles
+  - 2025-09-15: 8 articles
+  - 2025-09-14: 10 articles
+  - 2025-09-13: 8 articles
+  - 2025-09-12: 10 articles
+  - 2025-09-11: 10 articles
+  - 2025-09-06: 1 articles
+
+Indian Express (Total: 36)
+  - 2025-09-16: 5 articles
+  - 2025-09-15: 5 articles
+  - 2025-09-14: 5 articles
+  - 2025-09-13: 5 articles
+  - 2025-09-12: 5 articles
+  - 2025-09-11: 9 articles
+  - 2025-09-06: 2 articles
+
+Good News Network (Total: 31)
+  - 2025-09-16: 5 articles
+  - 2025-09-15: 5 articles
+  - 2025-09-14: 5 articles
+  - 2025-09-13: 5 articles
+  - 2025-09-12: 5 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+InspireMore (Total: 31)
+  - 2025-09-16: 5 articles
+  - 2025-09-15: 5 articles
+  - 2025-09-14: 5 articles
+  - 2025-09-13: 5 articles
+  - 2025-09-12: 5 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+Phys.org (Total: 31)
+  - 2025-09-16: 5 articles
+  - 2025-09-15: 5 articles
+  - 2025-09-14: 5 articles
+  - 2025-09-13: 5 articles
+  - 2025-09-12: 5 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+BBC News (Total: 31)
+  - 2025-09-16: 5 articles
+  - 2025-09-15: 5 articles
+  - 2025-09-14: 5 articles
+  - 2025-09-13: 5 articles
+  - 2025-09-12: 5 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+NPR (Total: 31)
+  - 2025-09-16: 5 articles
+  - 2025-09-15: 5 articles
+  - 2025-09-14: 5 articles
+  - 2025-09-13: 5 articles
+  - 2025-09-12: 5 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+Al Jazeera (Total: 31)
+  - 2025-09-16: 5 articles
+  - 2025-09-15: 5 articles
+  - 2025-09-14: 5 articles
+  - 2025-09-13: 5 articles
+  - 2025-09-12: 5 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+The Hindu (Total: 31)
+  - 2025-09-16: 5 articles
+  - 2025-09-15: 5 articles
+  - 2025-09-14: 5 articles
+  - 2025-09-13: 5 articles
+  - 2025-09-12: 5 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+Times of India (Total: 31)
+  - 2025-09-16: 5 articles
+  - 2025-09-15: 5 articles
+  - 2025-09-14: 5 articles
+  - 2025-09-13: 5 articles
+  - 2025-09-12: 5 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+DW (Total: 31)
+  - 2025-09-16: 5 articles
+  - 2025-09-15: 5 articles
+  - 2025-09-14: 5 articles
+  - 2025-09-13: 5 articles
+  - 2025-09-12: 5 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+France 24 (Total: 31)
+  - 2025-09-16: 5 articles
+  - 2025-09-15: 5 articles
+  - 2025-09-14: 5 articles
+  - 2025-09-13: 5 articles
+  - 2025-09-12: 5 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+The New York Times (Total: 31)
+  - 2025-09-16: 5 articles
+  - 2025-09-15: 5 articles
+  - 2025-09-14: 5 articles
+  - 2025-09-13: 5 articles
+  - 2025-09-12: 5 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+The Better India (Total: 30)
+  - 2025-09-16: 5 articles
+  - 2025-09-15: 5 articles
+  - 2025-09-14: 4 articles
+  - 2025-09-13: 5 articles
+  - 2025-09-12: 5 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+Space.com (Total: 30)
+  - 2025-09-16: 5 articles
+  - 2025-09-15: 4 articles
+  - 2025-09-14: 5 articles
+  - 2025-09-13: 5 articles
+  - 2025-09-12: 5 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+The Washington Post (Total: 28)
+  - 2025-09-16: 5 articles
+  - 2025-09-15: 3 articles
+  - 2025-09-14: 5 articles
+  - 2025-09-13: 5 articles
+  - 2025-09-12: 4 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+ScienceDaily (Total: 26)
+  - 2025-09-16: 5 articles
+  - 2025-09-15: 5 articles
+  - 2025-09-13: 5 articles
+  - 2025-09-12: 5 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+The Conversation (Total: 23)
+  - 2025-09-16: 5 articles
+  - 2025-09-15: 1 articles
+  - 2025-09-14: 1 articles
+  - 2025-09-13: 5 articles
+  - 2025-09-12: 5 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+NASA (Total: 23)
+  - 2025-09-16: 5 articles
+  - 2025-09-15: 2 articles
+  - 2025-09-13: 5 articles
+  - 2025-09-12: 5 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+Factly (Total: 22)
+  - 2025-09-16: 5 articles
+  - 2025-09-15: 1 articles
+  - 2025-09-13: 5 articles
+  - 2025-09-12: 5 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+Euronews (Total: 18)
+  - 2025-09-16: 3 articles
+  - 2025-09-15: 1 articles
+  - 2025-09-13: 4 articles
+  - 2025-09-12: 4 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+Full Fact (Total: 17)
+  - 2025-09-16: 5 articles
+  - 2025-09-13: 4 articles
+  - 2025-09-12: 2 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+MIT News (Total: 16)
+  - 2025-09-16: 5 articles
+  - 2025-09-15: 1 articles
+  - 2025-09-13: 2 articles
+  - 2025-09-12: 2 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+Science Magazine (Total: 15)
+  - 2025-09-16: 3 articles
+  - 2025-09-13: 2 articles
+  - 2025-09-12: 4 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+Nature (Total: 15)
+  - 2025-09-13: 5 articles
+  - 2025-09-12: 5 articles
+  - 2025-09-11: 5 articles
+
+The Harvard Gazette (Total: 14)
+  - 2025-09-16: 3 articles
+  - 2025-09-13: 2 articles
+  - 2025-09-12: 3 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+FactCheck.org (Total: 14)
+  - 2025-09-13: 4 articles
+  - 2025-09-12: 2 articles
+  - 2025-09-11: 7 articles
+  - 2025-09-06: 1 articles
+
+The Optimist Daily (Total: 13)
+  - 2025-09-16: 2 articles
+  - 2025-09-15: 2 articles
+  - 2025-09-13: 3 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+Stanford News (Total: 13)
+  - 2025-09-16: 2 articles
+  - 2025-09-13: 2 articles
+  - 2025-09-12: 3 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+Alt News (Total: 13)
+  - 2025-09-14: 1 articles
+  - 2025-09-13: 3 articles
+  - 2025-09-12: 4 articles
+  - 2025-09-11: 4 articles
+  - 2025-09-06: 1 articles
+
+Good Good Good (Total: 12)
+  - 2025-09-16: 2 articles
+  - 2025-09-14: 1 articles
+  - 2025-09-13: 2 articles
+  - 2025-09-12: 1 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+Sunny Skyz (Total: 11)
+  - 2025-09-16: 1 articles
+  - 2025-09-15: 1 articles
+  - 2025-09-14: 2 articles
+  - 2025-09-13: 1 articles
+  - 2025-09-12: 1 articles
+  - 2025-09-11: 4 articles
+  - 2025-09-06: 1 articles
+
+Futurity (Total: 11)
+  - 2025-09-16: 5 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+Positive News (Total: 8)
+  - 2025-09-16: 1 articles
+  - 2025-09-12: 2 articles
+  - 2025-09-11: 4 articles
+  - 2025-09-06: 1 articles
+
+Reasons to be Cheerful (Total: 8)
+  - 2025-09-16: 1 articles
+  - 2025-09-13: 1 articles
+  - 2025-09-12: 1 articles
+  - 2025-09-11: 4 articles
+  - 2025-09-06: 1 articles
+
+Caltech (Total: 7)
+  - 2025-09-16: 1 articles
+  - 2025-09-13: 1 articles
+  - 2025-09-11: 4 articles
+  - 2025-09-06: 1 articles
+
+The Guardian (Total: 7)
+  - 2025-09-16: 1 articles
+  - 2025-09-11: 5 articles
+  - 2025-09-06: 1 articles
+
+Good Black News (Total: 6)
+  - 2025-09-16: 1 articles
+  - 2025-09-11: 4 articles
+  - 2025-09-06: 1 articles
+
+EUvsDisinfo (Total: 6)
+  - 2025-09-13: 1 articles
+  - 2025-09-12: 4 articles
+  - 2025-09-06: 1 articles
+
+The Guardian Upside (Total: 5)
+  - 2025-09-11: 4 articles
+  - 2025-09-06: 1 articles
+
+The Wall Street Journal (Total: 5)
+  - 2025-09-11: 4 articles
+  - 2025-09-06: 1 articles
+
+--- RSS Sources with Zero Articles ---
+The following 9 sources from the registry produced 0 articles in the last 30 days:
+  - AP News
+  - ESA
+  - HuffPost Good News
+  - PolitiFact
+  - Reuters
+  - Reuters Fact Check
+  - TODAY
+  - USA TODAY
+  - YES! Magazine

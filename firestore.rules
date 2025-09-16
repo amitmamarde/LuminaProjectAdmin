@@ -14,9 +14,12 @@ service cloud.firestore {
     }
 
     // --- NEW: Rules for the trainingData collection ---
+    // --- Rules for the trainingData collection ---
     // Allow Admins to create documents in the trainingData collection.
     match /trainingData/{docId} {
       allow create: if isAdmin();
+      // Allow admins to read and list training data.
+      allow list, read: if isAdmin();
       // No one should read/update/delete these directly for now.
       allow read, update, delete: if false;
     }
@@ -27,7 +30,7 @@ service cloud.firestore {
       allow get: if resource.data.status == 'Published';
       
       // AUTHENTICATED users can list/read articles based on their role.
-      allow list, read: if request.auth != null;
+      allow list: if request.auth != null || isAdmin() || resource.data.status == 'Published';
 
       // ADMINS have full control to create and delete.
       allow create, delete: if isAdmin();
@@ -42,6 +45,8 @@ service cloud.firestore {
     // Rules for user profiles
     match /users/{userId} {
       // Any authenticated user can read profile data (e.g., to see an expert's name).
+      allow list: if isAdmin();
+
       allow read: if request.auth != null;
       // Only the user themselves or an Admin can update a profile.
       allow update: if request.auth != null && (request.auth.uid == userId || isAdmin());
